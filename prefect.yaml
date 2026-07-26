@@ -1,0 +1,54 @@
+name: lucking
+prefect-version: "3"
+
+deployments:
+  - name: default
+    version: "1"
+    tags: [trading-calendar]
+    description: 同一个 Deployment 承载月度、年末和人工交易日历同步。
+    entrypoint: src/lucking/flows/trading_calendar.py:sync_trading_calendar
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 2 1 * *"
+        timezone: Asia/Shanghai
+        slug: monthly-current-year
+        active: true
+        parameters:
+          mode: monthly
+          market_code: CN-S
+          schedule_slug: monthly-current-year
+      - cron: "30 2 20 12 *"
+        timezone: Asia/Shanghai
+        slug: year-end-next-year
+        active: true
+        parameters:
+          mode: year_end
+          market_code: CN-S
+          schedule_slug: year-end-next-year
+
+  - name: default
+    version: "1"
+    tags: [stock-list]
+    description: 每日北京时间 09:00 同步固定 CN-S 股票列表。
+    entrypoint: src/lucking/flows/stock_list.py:sync_stock_list
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 9 * * *"
+        timezone: Asia/Shanghai
+        slug: daily-stock-list
+        active: true
+        parameters:
+          scope_code: CN-S
+          schedule_slug: daily-stock-list
