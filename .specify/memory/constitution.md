@@ -1,22 +1,26 @@
 <!--
 同步影响报告
-- 版本变更：1.0.0 → 1.1.0
-- 修改的原则：
-  - II. 清晰的架构与数据边界 → II. 清晰边界与第三方数据源可替换性
-- 新增章节：无
+- 版本变更：1.1.0 → 1.2.0
+- 修改的原则：无
+- 新增原则：
+  - VI. MySQL 表结构一致性与可审计例外
+- 新增章节：无（在“核心原则”中新增原则 VI）
 - 删除章节：无
 - 需要同步的模板：
   - ✅ .specify/templates/plan-template.md
   - ✅ .specify/templates/spec-template.md
   - ✅ .specify/templates/tasks-template.md
 - 需要同步的 Spec Kit 命令：
+  - ✅ .agents/skills/speckit-analyze/SKILL.md
   - ✅ .agents/skills/speckit-plan/SKILL.md
   - ✅ .agents/skills/speckit-specify/SKILL.md
   - ✅ .agents/skills/speckit-tasks/SKILL.md
 - 运行指引：
   - ✅ README.md
-  - ✅ docs/frontend-technology-stack.md（已校验，无需修改）
-- 已校验的其他 Spec Kit 命令：✅ 无过时引用，无需修改
+  - ✅ docs/frontend-technology-stack.md（已校验，与 MySQL 表结构无关，无需修改）
+- 已校验的其他 Spec Kit 命令：
+  - ✅ speckit-checklist、speckit-clarify、speckit-converge、speckit-implement、
+    speckit-taskstoissues 无过时引用，无需修改
 - 后续 TODO：无
 -->
 # Lucking 项目宪章
@@ -81,6 +85,32 @@ FastAPI/OpenAPI 是前后端接口契约的唯一事实来源；前端生成代�
 
 理由：可诊断性缩短故障恢复时间，简洁性则控制系统的长期认知和运维成本。
 
+### VI. MySQL 表结构一致性与可审计例外
+
+项目拥有的新建 MySQL 业务表，以及发生结构性变更的既有 MySQL 业务表，在未获得特殊场景
+例外时，必须使用 `id BIGINT NOT NULL AUTO_INCREMENT` 作为主键，并必须包含以下由数据库
+维护的时间字段：
+
+```sql
+created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+```
+
+`id` 必须具有中文字段注释，例如 `COMMENT '主键ID'`。业务唯一性不得依赖自增主键替代；
+具有业务唯一标识的表仍必须建立相应的 `UNIQUE` 约束。项目拥有的每张 MySQL 表必须具有
+说明业务用途的中文表注释，每个字段也必须具有准确、非空的中文注释；该注释要求对获批
+例外同样适用。ORM 模型、迁移脚本和实际 DDL 必须保持一致。
+
+特殊场景仅限以下情况：纯关联表以复合外键表达唯一身份且没有独立生命周期；领域正确性、
+分区或外部互操作明确要求自然键或复合键作为物理主键；或者表由外部框架完全管理且不承载
+项目业务数据。任何例外必须在功能计划和 `data-model.md` 中逐表记录例外字段、业务理由、
+被拒绝的默认方案、唯一性保障、创建/更新时间语义及迁移影响，并在宪章检查中获批。既有表
+发生结构性变更时必须同步治理，不得以“历史表”为由静默延续不合规结构。
+
+理由：统一的代理主键、数据库维护时间和中文元数据可降低跨功能建模差异，提高排障、
+数据治理和迁移审查效率；受控例外保留了复合身份、分区及框架内部表的合理设计空间。
+
 ## 技术与文档约束
 
 - 后端使用 Python 3.12、FastAPI、SQLAlchemy/Alembic，并以 OpenAPI 描述公共 API。
@@ -98,6 +128,7 @@ FastAPI/OpenAPI 是前后端接口契约的唯一事实来源；前端生成代�
 1. 使用 `/speckit-specify` 形成范围清晰、可验证且使用中文编写的功能规格。
 2. 在 `/speckit-plan` 中记录技术上下文、边界、数据所有权、风险、质量策略和宪章检查；
    涉及第三方数据时还必须记录项目接口、规范化模型、适配器、供应商选择方式和迁移策略；
+   涉及 MySQL 表时还必须逐表证明主键、时间字段和中文注释符合原则 VI，或记录获批例外；
    研究前及设计后各执行一次宪章检查。
 3. 使用 `/speckit-tasks` 生成可追溯、依赖有序的任务；每个用户故事都必须包含先于实现的
    必要测试任务；第三方数据集成必须包含端口、适配器、契约测试和替代实现或测试替身任务，
@@ -121,4 +152,4 @@ FastAPI/OpenAPI 是前后端接口契约的唯一事实来源；前端生成代�
 无法合规时必须停止进入下一阶段，或在获得明确批准后记录限时例外及整改任务。维护者
 至少在每次发布前复核宪章、模板和运行文档的一致性。
 
-**版本**：1.1.0 | **批准日期**：2026-07-25 | **最后修订**：2026-07-25
+**版本**：1.2.0 | **批准日期**：2026-07-25 | **最后修订**：2026-07-28

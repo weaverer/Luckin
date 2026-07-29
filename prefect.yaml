@@ -52,3 +52,49 @@ deployments:
         parameters:
           scope_code: CN-S
           schedule_slug: daily-stock-list
+
+  - name: default
+    version: "1"
+    tags: [broker-recommendation]
+    description: 每月 3 日和 4 日北京时间 12:00 同步当前月券商金股。
+    entrypoint: src/lucking/flows/broker_recommendation.py:sync_broker_recommendations
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 12 3,4 * *"
+        timezone: Asia/Shanghai
+        slug: monthly-broker-recommendations
+        active: true
+        parameters:
+          schedule_slug: monthly-broker-recommendations
+
+  - name: manual
+    version: "1"
+    tags: [broker-recommendation, backfill]
+    description: 人工逐月补跑券商金股，最多 120 个闭区间月份。
+    entrypoint: src/lucking/flows/broker_recommendation.py:backfill_broker_recommendations
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+
+  - name: manual
+    version: "1"
+    tags: [broker-recommendation, retry]
+    description: 按原 run_id 显式重试券商金股同步。
+    entrypoint: src/lucking/flows/broker_recommendation.py:retry_broker_recommendation_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}

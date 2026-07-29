@@ -140,7 +140,9 @@ Given that feature description, do this:
        Create measurable, technology-agnostic outcomes
        Include both quantitative metrics (time, performance, volume) and qualitative measures (user satisfaction, task completion)
        Each criterion must be verifiable without implementation details
-    7. Identify Key Entities (if data involved)
+    7. Identify Key Entities (if data involved), including each entity's business identity,
+       uniqueness, lifecycle, and the business meaning of creation/update times; keep these
+       requirements technology-independent so planning can apply database governance
     8. Return: SUCCESS (spec ready for planning)
 
 7. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.

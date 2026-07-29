@@ -64,6 +64,11 @@ You **MUST** consider the user input before proceeding (if not empty).
    - For third-party data APIs, define the provider-neutral port and canonical model, isolate
      provider SDK/auth/pagination/error mapping in adapters, document provider selection and
      migration strategy, and plan contract tests with a replacement adapter or test double
+   - For every project-owned MySQL table that is new or structurally modified, apply Constitution
+     VI in data-model.md: document the BIGINT auto-increment primary key, database-maintained
+     created_at/updated_at, business unique constraints, and Chinese table/column comments; for
+     each approved exception, record its rationale, rejected default, uniqueness and timestamp
+     semantics, and migration impact
    - Evaluate gates (ERROR if violations unjustified)
    - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
    - Phase 1: Generate data-model.md, contracts/, quickstart.md
@@ -141,6 +146,8 @@ Command ends after Phase 1 design. Report branch, IMPL_PLAN path, and generated 
    - Entity name, fields, relationships
    - Validation rules from requirements
    - State transitions if applicable
+   - MySQL physical identity, database-maintained timestamps, Chinese metadata comments, and any
+     per-table Constitution VI exception evidence
 
 2. **Define interface contracts** (if project has external interfaces) → `/contracts/`:
    - Identify what interfaces the project exposes to users or other systems

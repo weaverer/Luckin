@@ -17,8 +17,8 @@ class BrokerRecommendationRequest:
 规则：
 
 - `target_month` 必须是目标自然月第一日。
-- Service 从原计划时间转换到 `Asia/Shanghai` 后推导该值；
-  Flow 或调用方不得另传一个可能冲突的自由月份。
+- 计划运行由 Service 从原计划时间转换到 `Asia/Shanghai` 后推导该值；
+  历史补跑由已校验的月份闭区间逐月提供该值。
 - Provider 不得根据实际调用时间改变目标月。
 
 ## 3. 规范推荐记录
@@ -57,10 +57,13 @@ class RetrievalEvidence:
     request_count: int
     completed_request_count: int
     retry_count: int
+    page_count: int
+    page_limit: int
+    last_page_count: int
     received_count: int
-    row_cap: int
-    cap_reached: bool
+    pagination_enabled: bool
     continuation_exhausted: bool
+    repeated_page_detected: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,13 +80,15 @@ class ProviderBrokerRecommendationBatch:
 - `completed_request_count = request_count`。
 - `retry_count ≤ 3`。
 - `records` 非空，且 `received_count > 0`。
-- `cap_reached = False`。
+- `page_count ≥ 1`、`page_limit > 0` 且 `0 ≤ last_page_count < page_limit`。
 - `continuation_exhausted = True`。
+- `repeated_page_detected = False`。
 - `acquired_at` 为 aware UTC。
 
-当前 Tushare Adapter 未获得可验证续取协议，因此单次返回 1,000 行时不得构造成功批次。
-替代 Provider 可以通过自身受支持的分页方式返回 1,000 条或更多记录，
-但必须提供完整覆盖证据。
+支持分页的 Provider 必须在页面数量等于 `page_limit` 时继续，取得首个短页后才可设置
+`continuation_exhausted=True`。不支持或尚未验证续取的 Adapter 若达到单次上限，
+不得构造成功批次。替代 Provider 可以通过自身受支持的分页方式返回任意完整数量，
+但必须提供等价覆盖证据。
 
 ## 5. Port
 
@@ -128,6 +133,8 @@ Adapter 必须：
 - 只访问自身声明的月度券商金股能力。
 - 封装鉴权、最小字段、供应商月份格式、续取、限流、有界重试和错误映射。
 - 验证响应字段精确、月份一致、代码后缀可映射和覆盖证据完整。
+- 对分页请求设置稳定前进条件；满页继续、短页结束，并检测重复整页、未前进、
+  最大页数和中途失败。
 - 对瞬态错误最多额外重试 3 次，且不超过整体 deadline。
 - 返回规范 DTO；不解析项目 `stock_id`，不写数据库。
 - 不吞掉、伪造或默认填充未知核心字段。
@@ -163,11 +170,13 @@ def build_broker_recommendation_provider(
 2. 输出字段严格限制为第 3 节。
 3. 目标月份和记录月份始终一致。
 4. venue、代码和临时 Provider 标识映射语义一致。
-5. 空结果、触顶、续取不完整和请求中断不能伪装为成功。
-6. 完全相同重复和冲突由 Service 得到一致输入语义。
-7. 所有错误映射为统一异常，秘密与原始 payload 不进入异常。
-8. Memory Provider 的 1,000 条完整批次可成功；当前 Tushare 的 1,000 行触顶批次失败。
-9. 替代 Provider 对固定 golden cases 产生相同规范摘要。
+5. 空首屏、未验证触顶、重复整页、未前进、超过最大页数、续取不完整和请求中断不能伪装为成功。
+6. `1,000/1,000/500` 页面序列得到 2,500 条完整批次；总量恰好为页面整数倍时，
+   最后一个空终止页也能形成完整覆盖证据。
+7. 完全相同重复和冲突由 Service 得到一致输入语义。
+8. 所有错误映射为统一异常，秘密与原始 payload 不进入异常。
+9. Memory Provider 的 2,500 条完整批次可成功；未验证分页的满页批次失败。
+10. 替代 Provider 对固定 golden cases 产生相同规范摘要。
 
 领域 Service 测试必须使用不导入 `integrations.tushare` 的 Memory Provider。
 

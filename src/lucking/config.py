@@ -3,7 +3,7 @@
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,8 +31,23 @@ class Settings(BaseSettings):
     stock_list_fetch_deadline_seconds: int = 1500
     stock_list_timeliness_target_ms: int = 1_800_000
     stock_list_segment_row_cap: int = 6000
+    broker_recommendation_provider: str = "tushare"
+    broker_recommendation_timezone: str = "Asia/Shanghai"
+    broker_recommendation_log_dir: Path = Path("logs")
+    broker_recommendation_log_filename: str = "broker-recommendation-sync.jsonl"
+    broker_recommendation_fetch_deadline_seconds: int = 1500
+    broker_recommendation_run_lease_seconds: int = 2100
+    broker_recommendation_timeliness_target_ms: int = 1_800_000
+    broker_recommendation_page_limit: int = 1000
+    broker_recommendation_max_pages: int = 100
+    broker_recommendation_tushare_pagination_enabled: bool = False
+    broker_recommendation_backfill_max_months: int = 120
 
-    @field_validator("trading_calendar_provider", "stock_list_provider")
+    @field_validator(
+        "trading_calendar_provider",
+        "stock_list_provider",
+        "broker_recommendation_provider",
+    )
     @classmethod
     def normalize_provider(cls, value: str) -> str:
         normalized = value.strip().lower()
@@ -47,7 +62,11 @@ class Settings(BaseSettings):
             raise ValueError("TUSHARE_API_URL 必须是 HTTP(S) URL")
         return value.rstrip("/")
 
-    @field_validator("trading_calendar_timezone", "stock_list_timezone")
+    @field_validator(
+        "trading_calendar_timezone",
+        "stock_list_timezone",
+        "broker_recommendation_timezone",
+    )
     @classmethod
     def validate_timezone(cls, value: str) -> str:
         try:
@@ -74,6 +93,35 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("股票列表数值配置必须大于 0")
         return value
+
+    @field_validator(
+        "broker_recommendation_fetch_deadline_seconds",
+        "broker_recommendation_run_lease_seconds",
+        "broker_recommendation_timeliness_target_ms",
+        "broker_recommendation_page_limit",
+        "broker_recommendation_max_pages",
+        "broker_recommendation_backfill_max_months",
+    )
+    @classmethod
+    def validate_positive_broker_recommendation_setting(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("券商金股数值配置必须大于 0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_broker_recommendation_invariants(self) -> "Settings":
+        if self.broker_recommendation_page_limit != 1000:
+            raise ValueError("BROKER_RECOMMENDATION_PAGE_LIMIT 固定为 1000")
+        if self.broker_recommendation_run_lease_seconds != 2100:
+            raise ValueError("BROKER_RECOMMENDATION_RUN_LEASE_SECONDS 固定为 2100")
+        if (
+            self.broker_recommendation_run_lease_seconds
+            <= self.broker_recommendation_fetch_deadline_seconds
+        ):
+            raise ValueError("运行租约必须大于 Provider 截止时间")
+        if self.broker_recommendation_backfill_max_months != 120:
+            raise ValueError("BROKER_RECOMMENDATION_BACKFILL_MAX_MONTHS 固定为 120")
+        return self
 
     def require_tushare_token(self) -> str:
         """Return the token only when the selected adapter is constructed."""

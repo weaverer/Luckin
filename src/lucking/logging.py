@@ -58,6 +58,20 @@ _ALLOWED_FIELDS = {
     "added_count",
     "updated_count",
     "unchanged_count",
+    "attempt_id",
+    "attempt_no",
+    "run_kind",
+    "backfill_batch_id",
+    "target_month",
+    "provider_request_count",
+    "provider_retry_count",
+    "provider_page_count",
+    "provider_page_limit",
+    "provider_last_page_count",
+    "timeliness_target_ms",
+    "duration_ms",
+    "schedule_lag_ms",
+    "completed_after_schedule_ms",
 }
 
 

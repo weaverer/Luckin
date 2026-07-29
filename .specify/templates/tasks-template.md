@@ -19,6 +19,11 @@ contract/integration tests for interface changes and focused end-to-end tests fo
 规范化模型、独立供应商适配器、配置或依赖注入、契约测试，以及至少一个替代适配器或测试
 替身。业务层任务不得直接引用第三方 SDK、传输模型或供应商专有字段。
 
+**MySQL 表结构**：如功能新建或结构性修改项目拥有的 MySQL 表，任务必须覆盖迁移和
+数据库模式验证：默认使用 `BIGINT AUTO_INCREMENT` 主键、数据库维护的
+`created_at/updated_at`、业务唯一约束，以及每张表和每个字段的中文注释。获批例外必须
+按 plan/data-model 中逐表记录的例外设计生成实现与验证任务。
+
 **组织方式**：按用户故事分组，使每个故事都能独立实现和测试。
 
 ## 格式：`[ID] [P?] [Story] 描述`
@@ -72,6 +77,7 @@ contract/integration tests for interface changes and focused end-to-end tests fo
 Examples of foundational tasks (adjust based on your project):
 
 - [ ] T004 Setup database schema and migrations framework
+- [ ] TXXX Validate MySQL primary keys, timestamps, unique constraints, and Chinese table/column comments in tests/integration/test_database_schema.py
 - [ ] T005 [P] Implement authentication/authorization framework
 - [ ] T006 [P] Setup API routing and middleware structure
 - [ ] T007 Create base models/entities that all stories depend on
@@ -168,6 +174,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Security hardening
 - [ ] TXXX Add or verify structured logging, metrics, and health checks
 - [ ] TXXX Verify third-party data contract tests with a replacement adapter or test double
+- [ ] TXXX Verify MySQL migrations and live schema match the approved default or documented exceptions
 - [ ] TXXX Run applicable lint, typecheck, test, and build quality gates
 - [ ] TXXX Run quickstart.md validation
 

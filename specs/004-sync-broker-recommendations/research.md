@@ -12,7 +12,7 @@
 **备选方案**：
 
 - 将金股逻辑加入 `stock_list`：会让全量基线缺失规则误用于金股。
-- 引入消息队列或新服务：当前每月两次、最多约 1,000 条的规模不需要。
+- 引入消息队列或新服务：当前每月两次、单月至少 2,500 条且补跑按月隔离的规模不需要。
 
 ## 决策 2：供应商无关 Port 与规范模型
 
@@ -30,8 +30,9 @@
 
 ## 决策 3：唯一端点和最小字段
 
-**决策**：Tushare Adapter 只调用 `broker_recommend`，参数只有 `month=YYYYMM`，
-请求字段严格为：
+**决策**：Tushare Adapter 只调用 `broker_recommend`，业务范围参数为 `month=YYYYMM`；
+在续取能力通过部署账户或供应商沙箱验证后，Adapter 可以附加已验证的 `limit/offset`
+技术分页参数。请求字段严格为：
 
 ```text
 month,broker,ts_code,name
@@ -51,39 +52,44 @@ month,broker,ts_code,name
 
 **来源**：<https://tushare.pro/document/2?doc_id=267>
 
-## 决策 4：不臆测分页，触顶保守失败
+## 决策 4：验证后按页循环，以短页证明续取结束
 
-**决策**：首期单月调用一次。返回 0 行判为 `EMPTY_AGGREGATE`；
-1–999 行可进入业务校验；恰好 1,000 行判为 `RESPONSE_CAPPED`，
-不得发布。只有供应商正式确认并通过真实契约测试证明续取参数、稳定性和终止条件后，
-才能扩展为循环提取。
+**决策**：Adapter 实现有界的 `limit/offset` 循环：从 `offset=0` 开始；
+页面行数等于 `limit` 时令 offset 前进并继续，首次取得小于 `limit` 的页面时结束。
+首个页面为空仍判为 `EMPTY_AGGREGATE`；前序页面非空且最后取得空页时，可证明总量恰好为
+页面上限的整数倍。每页和跨页都执行字段校验，并记录页面数量、页面上限、末页行数、
+累计原始行数与覆盖完成标志。
 
-**理由**：官方写明单次最大 1,000 行且“可循环提取”，但该端点公开输入只有 `month`，
-没有 cursor、offset、limit、券商过滤或排序保证。使用未公开参数无法证明没有重复首页、
-漏行或跨页漂移。ED-003 要求无法证明完整时失败。
+启用该能力前，必须通过部署账户或供应商沙箱证明 `limit/offset` 有效、offset 前进后不会
+重复首页且终止条件可靠。验证未通过或分页关闭时，恰好达到单次上限仍判为
+`RESPONSE_CAPPED`，不得发布。
+
+**理由**：官方写明单次最大 1,000 行且“可循环提取”，但公开输入表只列出 `month`，
+没有说明续取参数或排序保证。因此设计支持用户要求的循环获取，同时保留部署前契约门禁，
+避免把未经验证的参数行为当作完整性证明。
 
 **备选方案**：
 
-- 接受 1,000 行：可能静默发布截断结果。
-- 猜测 `offset/limit`：没有端点契约保证。
+- 单页达到 1,000 行就成功：可能静默发布截断结果。
+- 未经验证直接启用 `offset/limit`：可能重复首页、漏行或永不结束。
 - 按券商分拆：官方没有券商输入参数。
 
 **来源**：<https://tushare.pro/document/2?doc_id=267>、
 <https://tushare.pro/document/1?doc_id=130>
 
-## 决策 5：1,000 条容量与当前 Provider 上限分离
+## 决策 5：系统容量与单页上限分离
 
-**决策**：Provider-neutral Service、Repository 和内存替身必须成功处理 1,000 条完整候选，
-满足 NFR-002/SC-002；Tushare 恰好返回 1,000 条时因无法证明完整而失败。
-上线前实测若触顶，必须获得受支持的续取契约或切换兼容 Provider。
+**决策**：Provider-neutral Service、Repository 和内存替身必须成功处理至少 2,500 条完整候选；
+分页契约以 `1,000/1,000/500` 三页证明循环和短页终止。Tushare Adapter 只有在续取能力验证通过后
+才能把前两页的 1,000 行视为中间页；否则单页触顶仍失败。
 
-**理由**：系统容量和某个来源的完整性能力是两个不同约束。降低系统容量会违反规格，
-绕过当前来源上限门禁则会破坏数据可信度。
+**理由**：系统单月容量和某个来源的单页上限是两个不同约束。多页容量测试可以同时证明
+业务链路没有被 1,000 条限制，并且 Adapter 不会在满页时提前结束。
 
 **备选方案**：
 
-- 把系统容量降为 999：违反规格。
-- 对 Tushare 特判 1,000 为成功：违反 ED-003。
+- 把系统容量限定为单页：无法满足完整月份可能超过 1,000 条的需求。
+- 对 Tushare 单个满页直接判成功：违反 ED-003。
 
 ## 决策 6：复用稳定股票身份，不创建第二套主数据
 
@@ -91,7 +97,8 @@ month,broker,ts_code,name
 `stock_provider_mapping(provider_code, provider_security_id)` 解析 `stock_id`，
 并与 `stock_current(CN-S, venue_code, security_code)` 交叉校验。
 无映射时可按唯一规范键解析已有股票，但不得由金股同步创建股票主数据；
-不存在、不唯一或映射与规范键冲突时整批失败。
+不存在时记录脱敏 `UNKNOWN_STOCK_IDENTITY` issue 并跳过该条；不唯一或映射与规范键
+冲突时整批失败。
 
 **理由**：`stock_current` 已拥有项目 UUID 和稳定股票身份。复用它避免 `ts_code`
 成为业务键，也避免两个领域分别生成不同股票 ID。
@@ -133,28 +140,42 @@ month,broker,ts_code,name
 - 缺席软删除：同样创造了来源未提供的业务事实。
 - 要求 4 日必须是 3 日超集：规格没有此要求，可能导致合法批次失败。
 
-## 决策 9：权威计划周期与执行尝试分离
+## 决策 9：计划运行、历史补跑与失败重试分离
 
-**决策**：使用 `broker_recommendation_sync_run` 表示一个唯一计划周期，
-使用 `broker_recommendation_sync_attempt` 保存每次计划执行或人工补跑。
-3 日和 4 日的计划时点不同，因此是两个 run；失败补跑复用原 `run_key` 并追加 attempt。
-`SUCCEEDED` run 不可重开。
+**决策**：使用 `broker_recommendation_sync_run` 表示一个唯一运行身份，
+使用 `broker_recommendation_sync_attempt` 保存每次执行尝试。运行类型为
+`SCHEDULED` 或 `BACKFILL`：3 日和 4 日计划时点不同，因此是两个 run；
+历史补跑以 `backfill_batch_id + target_month` 形成每月独立 run；
+失败重试复用原 run 并追加 attempt。`SUCCEEDED` run 不可重开，
+但使用新的补跑批次键可以主动刷新同一历史月份。
 
-**理由**：FR-012 要求一个周期只有一个权威结果，FR-008 又要求每次补跑分别可追踪。
-单行覆盖最近开始/完成时间会丢失旧尝试，逐次新建权威 run 又会产生多个结果。
+**理由**：失败重试是在恢复同一业务运行，历史补跑则是显式指定月份的独立业务操作。
+将二者混为“人工补跑原计划时点”会导致项目初始化无法表达，也会使成功历史月份无法主动刷新。
 
 **备选方案**：
 
-- 完全照搬股票列表单 run 计数：不能完整保存各次补跑。
+- 把历史补跑伪装为过去的计划运行：制造不存在的计划时点，且语义不可审计。
+- 仅以目标月份作为补跑 run key：第一次成功后无法有意刷新同月。
 - 每次执行建立独立权威 run：违反幂等语义。
 
 ## 决策 10：数据库层并发认领
 
-**决策**：`run_key = SHA256(schedule_slug | scheduled_for_utc | target_month |
-scope_fingerprint)` 并受唯一约束。首次认领使用 MySQL 原子 insert-or-read
+**决策**：`run_key` 按运行类型生成并受唯一约束：
+
+```text
+SCHEDULED = SHA256("SCHEDULED" | schedule_slug | scheduled_for_utc |
+                   target_month)
+BACKFILL  = SHA256("BACKFILL" | backfill_batch_id | target_month)
+```
+
+Provider code、配置、`scope_fingerprint` 和实际启动时间均不参与 `run_key`；
+它们只作为执行审计。失败重试直接引用原 `run_id`，不重新计算运行身份。
+首次认领使用 MySQL 原子 insert-or-read
 或捕获唯一冲突后重读并加锁，禁止简单 `SELECT → INSERT`。
-同一 `flow_run_id` 重复提交返回同一 attempt；运行中周期由租约/心跳保护；
-过期后记录 `ABANDONED` 问题，再允许显式补跑。
+同一 `flow_run_id` 重复提交返回同一 attempt。运行中 attempt 在认领时由数据库 UTC
+时钟写入固定 35 分钟 `lease_expires_at`，首版不续租、不引入心跳；
+该时长覆盖 25 分钟 Provider deadline 并预留 10 分钟发布缓冲。
+Repository 使用数据库 UTC 原子判定过期，记录 `ABANDONED` 问题后才允许对原运行显式重试。
 
 **理由**：两个并发首次触发可能都看不到行，仅靠 Prefect 并发限制无法防止多个 Worker、
 人工触发或重启竞态。MySQL 唯一约束必须是最终保障。
@@ -163,16 +184,21 @@ scope_fingerprint)` 并受唯一约束。首次认领使用 MySQL 原子 insert-
 
 - Redis 锁：增加状态源且不能替代业务唯一约束。
 - Flow Run ID 作为周期键：它表示执行尝试，不是计划周期。
+- 可续租心跳：增加后台续租、失联检测和更多竞态；当前固定上限运行不需要该复杂度。
+- 把 `scope_fingerprint` 放入 `run_key`：同一补跑批次和月份会在配置或契约升级后
+  产生第二个权威 run；主动刷新已有新的批次键语义，无需借范围指纹绕过幂等。
 
 ## 决策 11：全批校验与原子发布
 
-**决策**：候选在内存完成覆盖、月份、必填字段、券商名称、股票身份、完全重复和冲突校验。
-任一未解决无效或冲突导致整批失败。成功事务锁定 run/attempt，批量 upsert 推荐，
+**决策**：单月的所有分页候选在内存完成覆盖、月份、必填字段、券商名称、股票身份、
+跨页完全重复和冲突校验。
+身份冲突、字段冲突或其他未解决核心无效导致整批失败；单条未知股票身份记录 issue 后
+跳过，不影响其他有效推荐。成功事务锁定 run/attempt，批量 upsert 推荐，
 保留 `first_seen`，刷新 `last_confirmed`，写计数与摘要，并同时把 attempt/run 置为成功。
 任一步失败整体回滚，再以独立事务保存失败计数和有限的安全 issue。
 
 **理由**：消费者不会看到半批更新，失败批次也不会修改已有推荐。
-单月约 1,000 条，内存校验比 staging 表简单。
+单月验收规模至少 2,500 条，仍适合内存聚合；相比 staging 表更少生命周期和清理状态。
 
 **备选方案**：
 
@@ -196,21 +222,27 @@ scope_fingerprint)` 并受唯一约束。首次认领使用 MySQL 原子 insert-
 - 所有错误重试：确定性错误不会自行恢复。
 - 无限重试：无法在 12:30 前形成终态。
 
-## 决策 13：计划时点来自 Prefect runtime
+## 决策 13：计划时点与历史补跑目标月分别建模
 
 **决策**：Deployment 使用 Cron `0 12 3,4 * *`、`Asia/Shanghai`、
 slug `monthly-broker-recommendations`、并发 1 和 `ENQUEUE`。
-计划运行读取 Prefect runtime 的 `scheduled_start_time`；人工补跑必须传原计划时点。
-Service 从原计划时点推导目标月份。
+计划运行读取 Prefect runtime 的 `scheduled_start_time`，Service 从原计划时点推导目标月份。
+另设人工历史补跑 Flow，要求 `start_month`、`end_month` 和非空 `backfill_batch_id`，
+先按首尾月份均计入的口径整体校验最多 120 个月，再按自然月展开。
+每月先解析既有 run：不存在则发 Backfill 命令，
+成功则跳过，失败或过期则取得原 `run_id` 转为 Retry 命令，租约有效的运行保持进行中。
 
-**理由**：排队、停机恢复或跨月补跑时，实际启动时间可能不属于原月份。
-Prefect runtime 官方提供预期计划开始时间，正适合作为业务周期来源。
+**理由**：排队或停机恢复时，实际启动时间可能不属于原计划月份；历史初始化补跑又不存在
+原计划时点。分开建模可以同时保证计划月份正确和历史补跑语义真实。
 
 **备选方案**：
 
 - `datetime.now()`：延迟跨月后会查询错误月份。
-- 允许自由传 `target_month`：可能与计划时点矛盾。
+- 所有人工运行都传原计划时点：无法正确表达项目初始化的历史范围。
+- 计划运行允许自由传 `target_month`：可能与计划时点矛盾。
 - 系统 cron：绕过项目编排和可观测性。
+- 重放失败月份时再次发送 Backfill 命令：无法满足“失败 run 仅能通过 Retry 新增 attempt”
+  的状态机约束。
 
 **来源**：<https://docs.prefect.io/v3/api-ref/python/prefect-runtime-flow_run>
 
@@ -235,32 +267,50 @@ Registry 显式构造当前 Adapter，不做运行中静默 fallback。
 **决策**：新增：
 
 1. `broker_recommendation`：长期有效的月度推荐事实。
-2. `broker_recommendation_sync_run`：唯一权威计划周期。
+2. `broker_recommendation_sync_run`：唯一计划或单月补跑运行。
 3. `broker_recommendation_sync_attempt`：每次执行的不可变计数和终态。
 4. `broker_recommendation_sync_issue`：有限的脱敏质量问题样本。
 
 迁移为 revision `003`，并修正 `migrations/env.py` 的模型加载。
+四表均不申请宪章例外，统一采用：
+
+- `id BIGINT NOT NULL AUTO_INCREMENT` 物理主键；
+- 原 UUID 字段作为带 `UNIQUE` 的业务标识；
+- 数据库默认值和 `ON UPDATE` 维护的 `created_at/updated_at`；
+- 逐表中文表注释和每列非空中文注释。
+
+事件时间继续使用独立业务字段表达；`updated_at` 只表示数据库行最近变化。
 
 **理由**：MySQL 适合低量强一致事实、唯一约束和事务发布。四表是同时满足推荐查询、
-周期幂等、逐次审计和问题排障的最小模型。
+周期幂等、逐次审计和问题排障的最小模型。自增物理主键满足项目统一治理，
+UUID 业务标识则保持现有领域契约和跨表引用稳定。
 
 **备选方案**：
 
 - 只用推荐表和日志：无法持久保证周期幂等。
 - 三表且覆盖 run 尝试字段：丢失各次补跑历史。
 - ClickHouse 或 Redis：不适合本功能事务事实所有权。
+- UUID 直接作为物理主键：违反宪章 VI，且没有满足获批例外的业务理由。
+- 只添加自增主键而删除 UUID：会破坏跨层稳定业务标识和现有契约。
 
 ## 决策 16：测试与上线门禁
 
 **决策**：
 
-- 契约：Memory/Tushare golden semantics、唯一端点、精确字段、月份、后缀、0/999/1000、
-  错误映射和替代 Provider。
-- 单元：目标月、跨月补跑、Unicode 空白、唯一身份、重复、冲突、缺席不删除和重试分类。
+- 契约：Memory/Tushare golden semantics、唯一端点、精确字段、月份、后缀、
+  分页前进/短页终止/重复页保护、错误映射和替代 Provider。
+- 单元：计划目标月、历史补跑范围、运行键、Unicode 空白、唯一身份、重复、冲突、
+  缺席不删除和重试分类。
 - SQLite 集成：常规 upsert、计数、失败零发布和内部查询。
-- MySQL 集成：区分字符 collation、首次并发认领、真实唯一约束、行锁、事务回滚和迁移。
-- Flow/E2E：计划 runtime 时间、Cron、日志安全、3 日→4 日、30 次重复和 10 组并发补跑。
-- 容量：Memory Provider 的 1,000 条成功与 Tushare fixture 的 1,000 条触顶失败。
+- MySQL 集成：区分字符 collation、首次并发认领、BIGINT 自增物理主键、
+  UUID 业务唯一键、数据库维护时间、中文表/列注释、固定租约及数据库 UTC 过期判断、
+  行锁、跨运行类型并发仅验证业务唯一键无重复、
+  事务回滚和迁移。
+- Flow/E2E：计划 runtime 时间、Cron、日志安全、3 日→4 日、24 月初始化补跑、
+  120 月接受、121 月原子拒绝、同批次失败月转 Retry、30 次重复、
+  10 组同批次并发和 10 组计划/补跑同月并发。
+- 容量：Memory Provider 和启用分页的 Adapter fixture 均以 `1,000/1,000/500`
+  证明 2,500 条完整处理；未验证分页时满页仍失败。
 
 **理由**：最高风险集中在第三方完整性、月份归属、MySQL 名称语义、并发首认领和失败原子性，
 仅做单元或 SQLite 测试无法证明。
@@ -277,12 +327,19 @@ Registry 显式构造当前 Adapter，不做运行中静默 fallback。
 - 调度：北京时间每月 3、4 日 12:00，使用 Prefect 原计划时间。
 - 目标月：原计划时点所属当前自然月。
 - 当前端点：Tushare `broker_recommend`，仅四字段。
-- 完整性：0 行与 1,000 行触顶失败；1–999 行继续校验。
-- 容量：Provider-neutral 链路验证 1,000 条，当前来源触顶时阻断上线。
+- 完整性：经验证分页时满页继续、短页结束；重复页、未前进、中断或无法证明完整时失败。
+- 容量：Provider-neutral 链路验证至少 2,500 条，当前来源分页验证未通过时触顶阻断上线。
 - 身份：复用现有 `stock_id` 与 Provider 映射，不持久化 `ts_code`。
 - 唯一性：月份 + 精确规范券商名称 + `stock_id`。
 - 生命周期：只新增/更新/确认，缺席永不删除。
-- 审计：run + attempt + issue，单事务发布。
+- 审计：计划与历史补跑使用不同 run 身份，失败重试追加 attempt，单月单事务发布。
+- 历史补跑：显式月份闭区间最多 120 月；同一批次成功月跳过、失败/过期月转 Retry、
+  未开始月首次运行，新批次允许刷新。
+- 运行恢复：attempt 使用数据库 UTC 设置的固定 35 分钟租约，不续租、不引入心跳。
+- 跨类型并发：不同 run 分别审计，只验证推荐业务唯一键不重复；
+  股票代码稳定，其他属性不定义跨 run 版本优先级。
+- MySQL 治理：四表使用 BIGINT 自增物理主键、唯一 UUID 业务标识、
+  数据库维护时间和完整中文元数据，无宪章例外。
 - 重试：初次调用后最多 3 次瞬态重试，Flow 不重试。
 - 组件排除：无公共 API、前端、ClickHouse、应用 Redis或新依赖。
 

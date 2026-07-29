@@ -66,6 +66,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Load plan.md and extract tech stack, libraries, project structure
    - Load spec.md and extract user stories with their priorities (P1, P2, P3, etc.)
    - If data-model.md exists: Extract entities and map to user stories
+   - If MySQL tables are new or structurally modified: Generate migration and schema-verification
+     tasks for Constitution VI defaults or each documented per-table exception
    - If contracts/ exists: Map interface contracts to user stories
    - If research.md exists: Extract decisions for setup tasks
    - Generate tasks organized by user story (see Task Generation Rules below)
@@ -148,6 +150,13 @@ For every third-party data API, generate separate tasks for the provider-neutral
 model, provider adapter, configuration or dependency-injection selection, contract tests, and at
 least one replacement adapter or test double. Domain and business tasks must not depend directly on
 provider SDKs, transport models, error codes, or proprietary fields.
+
+For every project-owned MySQL table that is new or structurally modified, generate tasks for the
+approved primary-key design, database-maintained created_at/updated_at, business unique constraints,
+Chinese table and column comments, migration implementation, and live-schema/integration
+verification. If the plan records a Constitution VI exception, tasks must preserve and verify the
+documented uniqueness, timestamp semantics, rationale, and migration impact instead of silently
+applying the default.
 
 Generate the task document in Simplified Chinese; code identifiers, commands, protocol fields,
 and proper nouns may remain in English.

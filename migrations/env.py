@@ -5,6 +5,18 @@ from sqlalchemy import engine_from_config, pool
 
 from lucking.config import Settings
 from lucking.db import Base
+from lucking.models.broker_recommendation import (  # noqa: F401
+    BrokerRecommendation,
+    BrokerRecommendationSyncAttempt,
+    BrokerRecommendationSyncIssue,
+    BrokerRecommendationSyncRun,
+)
+from lucking.models.stock_list import (  # noqa: F401
+    StockCurrent,
+    StockListSyncIssue,
+    StockListSyncRun,
+    StockProviderMapping,
+)
 from lucking.models.trading_calendar import TradingCalendar  # noqa: F401
 
 config = context.config
@@ -41,4 +53,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

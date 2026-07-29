@@ -9,6 +9,11 @@
 所有第三方数据 API 必须通过项目自有的供应商无关接口和独立适配器接入；业务代码不得
 直接依赖供应商 SDK、传输模型或专有字段，并必须通过契约测试验证数据源可替换性。
 
+项目拥有的新建或发生结构性变更的 MySQL 业务表默认使用 `BIGINT AUTO_INCREMENT`
+主键、数据库维护的 `created_at/updated_at`，并为表和全部字段提供准确的中文注释。
+复合身份、分区或框架内部表等特殊场景必须在功能计划和数据模型中逐表记录并通过宪章
+检查，不得以口头约定跳过。
+
 ## Windows / WSL2 开发基础设施
 
 应用进程在 WSL2 Ubuntu 本机运行，Docker Compose 只负责 MySQL、
@@ -282,3 +287,33 @@ uv run pytest tests/contract/test_stock_list_scope.py
 
 更换数据源时只新增 `StockListProvider` Adapter、通过统一契约测试并在 Registry 中显式注册；
 Service、Repository、Flow、固定 `CN-S` 范围和领域模型不依赖 Tushare。
+
+## 券商金股同步
+
+`broker-recommendation-sync/default` 在 `Asia/Shanghai` 每月 3、4 日 12:00
+运行，只调用 Tushare `broker_recommend` 的 `month,broker,ts_code,name` 四字段。
+4 日缺席的推荐不会删除；可信行按
+`recommendation_month + broker_name + stock_id` 幂等新增、更新或确认。
+
+配置见 `.env.example`。运行租约固定为数据库 UTC 的 35 分钟，Provider 截止时间为
+25 分钟且 Flow 不自动重试。`limit/offset` 分页默认关闭；只有部署账户或沙箱确认页面
+前进、满页续取和短页终止后，才能启用
+`BROKER_RECOMMENDATION_TUSHARE_PAGINATION_ENABLED=true`。关闭时单页达到 1,000
+会安全失败，避免把截断数据当完整月份发布。
+
+历史补跑使用无 Cron 的 `broker-recommendation-backfill/manual`，传入月首
+`start_month`、`end_month` 和稳定 `backfill_batch_id`。闭区间最多 120 个月；
+121 个月、未来月份、反向范围会在创建任何 run 前整体拒绝。同批次成功月跳过，
+失败月或数据库 UTC 判断已过期的运行按原 `run_id` 转为 Retry；有效租约返回
+`IN_PROGRESS`。新批次键可主动刷新同月。计划与补跑并发时分别保留运行审计，
+业务唯一键仍只产生一条推荐；股票简称允许按事务提交顺序落值。
+
+日志写入 `logs/broker-recommendation-sync.jsonl`，只含白名单业务 UUID、状态、分页
+证据和计数，不含 Token、连接串、原始响应或物理 BIGINT 主键。五分钟排障先关联
+Prefect Flow Run、`run_id`、`attempt_id`，再查看安全 `error_category` 和 issue；
+修复后调用 `broker-recommendation-retry/manual` 并传原 `run_id`。安全停止时暂停
+Deployment 或停止 Worker，不要删除数据库卷。
+
+单条推荐无法解析到 `stock_current` 时会写入脱敏 `UNKNOWN_STOCK_IDENTITY` issue、
+增加 `invalid_count` 并跳过该条，不影响同月其他有效推荐；如果整月没有任何可解析记录，
+运行仍会失败。

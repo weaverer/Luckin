@@ -139,6 +139,9 @@ Focus on high-signal findings. Limit to 50 findings total; aggregate remainder i
 
 - Any requirement or plan element conflicting with a MUST principle
 - Missing mandated sections or quality gates from constitution
+- For plans that add or structurally modify project-owned MySQL tables, missing Constitution VI
+  defaults, Chinese table/column comments, schema-verification tasks, or unapproved/undocumented
+  per-table exceptions
 
 #### E. Coverage Gaps
 

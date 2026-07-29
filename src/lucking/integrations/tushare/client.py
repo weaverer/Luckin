@@ -31,11 +31,13 @@ class TushareError(RuntimeError):
         *,
         status_code: int | None = None,
         provider_code: int | None = None,
+        retry_after_seconds: float | None = None,
     ) -> None:
         self.category = category
         self.summary = summary[:240]
         self.status_code = status_code
         self.provider_code = provider_code
+        self.retry_after_seconds = retry_after_seconds
         super().__init__(f"{category.value}: {self.summary}")
 
 
@@ -85,10 +87,16 @@ class TushareClient:
             ) from exc
 
         if response.status_code == 429:
+            retry_after: float | None = None
+            try:
+                retry_after = float(response.headers.get("Retry-After", ""))
+            except ValueError:
+                pass
             raise TushareError(
                 TushareErrorCategory.RATE_LIMITED,
                 "上游短时频率限制",
                 status_code=response.status_code,
+                retry_after_seconds=retry_after,
             )
         if response.status_code >= 500:
             raise TushareError(
@@ -122,9 +130,7 @@ class TushareClient:
             response_fields = data["fields"]
             items = data["items"]
         except (KeyError, TypeError) as exc:
-            raise TushareError(
-                TushareErrorCategory.INVALID_PAYLOAD, "响应缺少表格字段"
-            ) from exc
+            raise TushareError(TushareErrorCategory.INVALID_PAYLOAD, "响应缺少表格字段") from exc
         if not isinstance(response_fields, list) or not all(
             isinstance(field, str) for field in response_fields
         ):

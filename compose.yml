@@ -5,6 +5,7 @@ services:
     image: mysql:8.4.10
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-lucking}
       MYSQL_USER: ${MYSQL_USER:-lucking}
@@ -12,6 +13,7 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
     ports:
       - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     volumes:
@@ -31,6 +33,7 @@ services:
     image: clickhouse/clickhouse-server:26.7.1
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-lucking}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-lucking}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Set CLICKHOUSE_PASSWORD in .env}
@@ -90,6 +93,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      TZ: Asia/Shanghai
       PREFECT_SERVER_API_HOST: 0.0.0.0
       PREFECT_SERVER_UI_API_URL: http://127.0.0.1:${PREFECT_PORT:-4200}/api
       PREFECT_MESSAGING_BROKER: prefect_redis.messaging

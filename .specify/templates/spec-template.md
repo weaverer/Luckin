@@ -123,6 +123,11 @@
 
 ### 关键实体 *（功能涉及数据时填写）*
 
+<!--
+  对每个实体说明业务身份、唯一性、生命周期，以及创建/更新时间是否具有业务语义。
+  本节保持技术无关；具体 MySQL 主键、时间字段、中文注释和例外设计在 plan/data-model 中落实。
+-->
+
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
