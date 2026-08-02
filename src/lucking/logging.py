@@ -72,6 +72,11 @@ _ALLOWED_FIELDS = {
     "duration_ms",
     "schedule_lag_ms",
     "completed_after_schedule_ms",
+    "data_kind",
+    "target_trade_date",
+    "window_timeliness",
+    "status",
+    "skipped",
 }
 
 

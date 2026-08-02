@@ -98,3 +98,121 @@ deployments:
       name: local-pool
       work_queue_name: default
       job_variables: {}
+
+  - name: adj-factor-sync
+    version: "1"
+    tags: [market-data]
+    description: 每个交易日北京时间 09:00 同步全市场日线复权因子（开盘前完成）。
+    entrypoint: src/lucking/flows/market_data.py:market_data_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 9 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: adj-factor-sync
+        active: true
+        parameters:
+          data_kind: ADJ_FACTOR
+          schedule_slug: adj-factor-sync
+
+  - name: daily-quote-sync
+    version: "1"
+    tags: [market-data]
+    description: 每个交易日北京时间 17:00 同步全市场未复权日线行情。
+    entrypoint: src/lucking/flows/market_data.py:market_data_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 17 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: daily-quote-sync
+        active: true
+        parameters:
+          data_kind: DAILY_QUOTE
+          schedule_slug: daily-quote-sync
+
+  - name: daily-basic-sync
+    version: "1"
+    tags: [market-data]
+    description: 每个交易日北京时间 17:45 同步全市场每日基本面指标。
+    entrypoint: src/lucking/flows/market_data.py:market_data_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "45 17 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: daily-basic-sync
+        active: true
+        parameters:
+          data_kind: DAILY_BASIC
+          schedule_slug: daily-basic-sync
+
+  - name: weekly-kline-sync
+    version: "1"
+    tags: [market-data]
+    description: 每个交易日北京时间 18:30 同步全市场周K线（独立数据模型）。
+    entrypoint: src/lucking/flows/market_data.py:market_data_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "30 18 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: weekly-kline-sync
+        active: true
+        parameters:
+          data_kind: WEEKLY_KLINE
+          schedule_slug: weekly-kline-sync
+
+  - name: monthly-kline-sync
+    version: "1"
+    tags: [market-data]
+    description: 每个交易日北京时间 18:30 同步全市场月K线（独立数据模型）。
+    entrypoint: src/lucking/flows/market_data.py:market_data_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "30 18 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: monthly-kline-sync
+        active: true
+        parameters:
+          data_kind: MONTHLY_KLINE
+          schedule_slug: monthly-kline-sync
+
+  - name: backfill
+    version: "1"
+    tags: [market-data, backfill]
+    description: 人工按交易日区间回补行情数据（2024-01-01 起，逐日幂等）。
+    entrypoint: src/lucking/flows/market_data.py:backfill_market_data
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}

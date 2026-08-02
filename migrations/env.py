@@ -11,6 +11,11 @@ from lucking.models.broker_recommendation import (  # noqa: F401
     BrokerRecommendationSyncIssue,
     BrokerRecommendationSyncRun,
 )
+from lucking.models.market_data import (  # noqa: F401
+    MarketDataSyncAttempt,
+    MarketDataSyncIssue,
+    MarketDataSyncRun,
+)
 from lucking.models.stock_list import (  # noqa: F401
     StockCurrent,
     StockListSyncIssue,

@@ -42,11 +42,32 @@ class Settings(BaseSettings):
     broker_recommendation_max_pages: int = 100
     broker_recommendation_tushare_pagination_enabled: bool = False
     broker_recommendation_backfill_max_months: int = 120
+    daily_quote_provider: str = "tushare"
+    adj_factor_provider: str = "tushare"
+    daily_basic_provider: str = "tushare"
+    kline_provider: str = "tushare"
+    market_data_timezone: str = "Asia/Shanghai"
+    market_data_log_dir: Path = Path("logs")
+    market_data_log_filename: str = "market-data-sync.jsonl"
+    market_data_fetch_deadline_seconds: int = 1500
+    market_data_run_lease_seconds: int = 2100
+    market_data_page_limit: int = 6000
+    market_data_max_pages: int = 10
+    market_data_tushare_pagination_enabled: bool = False
+    clickhouse_host: str = "127.0.0.1"
+    clickhouse_port: int = 8123
+    clickhouse_database: str = "lucking"
+    clickhouse_user: str = "lucking"
+    clickhouse_password: SecretStr | None = None
 
     @field_validator(
         "trading_calendar_provider",
         "stock_list_provider",
         "broker_recommendation_provider",
+        "daily_quote_provider",
+        "adj_factor_provider",
+        "daily_basic_provider",
+        "kline_provider",
     )
     @classmethod
     def normalize_provider(cls, value: str) -> str:
@@ -66,6 +87,7 @@ class Settings(BaseSettings):
         "trading_calendar_timezone",
         "stock_list_timezone",
         "broker_recommendation_timezone",
+        "market_data_timezone",
     )
     @classmethod
     def validate_timezone(cls, value: str) -> str:
@@ -107,6 +129,35 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("券商金股数值配置必须大于 0")
         return value
+
+    @field_validator(
+        "market_data_fetch_deadline_seconds",
+        "market_data_run_lease_seconds",
+        "market_data_page_limit",
+        "market_data_max_pages",
+    )
+    @classmethod
+    def validate_positive_market_data_setting(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("行情数据数值配置必须大于 0")
+        return value
+
+    @field_validator("clickhouse_port")
+    @classmethod
+    def validate_clickhouse_port(cls, value: int) -> int:
+        if not 1 <= value <= 65535:
+            raise ValueError("CLICKHOUSE_PORT 必须是有效端口")
+        return value
+
+    @model_validator(mode="after")
+    def validate_market_data_invariants(self) -> "Settings":
+        if self.market_data_page_limit != 6000:
+            raise ValueError("MARKET_DATA_PAGE_LIMIT 固定为 6000")
+        if self.market_data_run_lease_seconds != 2100:
+            raise ValueError("MARKET_DATA_RUN_LEASE_SECONDS 固定为 2100")
+        if self.market_data_run_lease_seconds <= self.market_data_fetch_deadline_seconds:
+            raise ValueError("运行租约必须大于 Provider 截止时间")
+        return self
 
     @model_validator(mode="after")
     def validate_broker_recommendation_invariants(self) -> "Settings":

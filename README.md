@@ -317,3 +317,114 @@ Deployment 或停止 Worker，不要删除数据库卷。
 单条推荐无法解析到 `stock_current` 时会写入脱敏 `UNKNOWN_STOCK_IDENTITY` issue、
 增加 `invalid_count` 并跳过该条，不影响同月其他有效推荐；如果整月没有任何可解析记录，
 运行仍会失败。
+
+## A股行情数据同步
+
+每个交易日按用户确认的时点同步四类 Tushare 接口数据（五类数据模型）：
+复权因子 09:00（开盘前完成）、日线 17:00、基本面指标 17:45、周/月K线 18:30
+（周线与月线为同一接口 `stk_week_month_adj` 的两个独立数据模型）。
+五类行情数据写入 ClickHouse（`ReplacingMergeTree(updated_at)`、按月分区、
+`(trade_date, stock_id)` 排序键），同步审计写入 MySQL
+（`market_data_sync_run` / `market_data_sync_attempt` / `market_data_sync_issue`，
+以 `data_kind` 区分五类）。交易日判断复用 `trading_calendar`（CN-S），
+非交易日返回跳过且不调用来源接口。
+
+### 配置与迁移
+
+本机 `.env` 增加（真实 Token 不得提交或写入日志）：
+
+```dotenv
+DAILY_QUOTE_PROVIDER=tushare
+ADJ_FACTOR_PROVIDER=tushare
+DAILY_BASIC_PROVIDER=tushare
+KLINE_PROVIDER=tushare
+MARKET_DATA_TIMEZONE=Asia/Shanghai
+MARKET_DATA_LOG_DIR=logs
+MARKET_DATA_LOG_FILENAME=market-data-sync.jsonl
+MARKET_DATA_FETCH_DEADLINE_SECONDS=1500
+MARKET_DATA_RUN_LEASE_SECONDS=2100
+MARKET_DATA_PAGE_LIMIT=6000
+MARKET_DATA_MAX_PAGES=10
+CLICKHOUSE_HOST=127.0.0.1
+CLICKHOUSE_PORT=8123
+CLICKHOUSE_DATABASE=lucking
+CLICKHOUSE_USER=lucking
+CLICKHOUSE_PASSWORD=本机秘密
+```
+
+迁移 MySQL 审计三表并创建 ClickHouse 五张业务表（幂等）：
+
+```bash
+uv run alembic upgrade head
+uv run python -m lucking.clickhouse migrate
+```
+
+### Deployment
+
+`prefect.yaml` 定义五个 `market-data-sync` Deployment（`Asia/Shanghai`、
+并发 1、`ENQUEUE`、`retries=0`）：`adj-factor-sync`（`0 9 * * 1-5`）、
+`daily-quote-sync`（`0 17 * * 1-5`）、`daily-basic-sync`（`45 17 * * 1-5`）、
+`weekly-kline-sync` 与 `monthly-kline-sync`（`30 18 * * 1-5`），以及人工回补
+`market-data-backfill/backfill`。部署方式与其他功能一致：
+
+```bash
+uv run prefect --no-prompt deploy --name market-data-sync/adj-factor-sync
+```
+
+每个 Flow 启动后按 Prefect runtime 原计划时点推导目标交易日并查询 CN-S 交易日历；
+非交易日直接记录跳过并成功结束。失败重试引用原 `run_id`，目标交易日不变，
+禁止用实际启动时间推导。
+
+### 回补与幂等
+
+上线初始化从 2024-01-01 起按交易日逐日回补，闭区间整体校验（早于 2024-01-01、
+未来、反向范围在任何运行创建前拒绝）：
+
+```bash
+uv run prefect deployment run 'market-data-backfill/backfill' \
+  --param data_kind=DAILY_QUOTE \
+  --param start_date=2024-01-01 --param end_date=2024-01-10 \
+  --param backfill_batch_id=demo-20260801
+```
+
+`backfill_batch_id + data_kind + target_trade_date` 确定运行身份：同批次成功日期跳过，
+失败日期复用原运行新增尝试；新批次键可主动刷新同一历史交易日。ClickHouse 以
+单 block 批量 INSERT 原子写入，`ReplacingMergeTree` 同键替换保证重试后行集与
+成功执行一致；查询任意时刻看不到半批结果。
+
+### 完整性、失败与数据生命周期
+
+- 单日全市场约 5,400 行，低于 6,000 行上限时单次请求即可；返回达到上限且无法证明
+  完整时安全失败（`RESPONSE_CAPPED`），不把截断数据当完整交易日发布。
+  续取分页默认关闭，只有部署账户验证后才可启用
+  `MARKET_DATA_TUSHARE_PAGINATION_ENABLED=true`。
+- 四个接口各自独立调度、独立恢复：任一接口失败不阻塞、不回滚其他数据类。
+- 停牌股票当日无记录属正常业务结果；亏损公司 PE/PB 等空值以 NULL 保存。
+- 单条记录无法解析到 `stock_current` 时写入脱敏 `UNKNOWN_STOCK_IDENTITY` issue
+  并跳过，不影响同日其他有效数据；整日无可解析记录则运行失败。
+- 数据长期保留，不存在自动清理逻辑；需要清理时按交易日/周期显式执行
+  （ClickHouse 按月分区 `ALTER TABLE ... DROP PARTITION` 路径），
+  由消费方确认后操作。
+
+### 日志与五分钟排障
+
+日志写入 `logs/market-data-sync.jsonl`，字段白名单为 `data_kind`、run/attempt、
+目标交易日、批次键、提取计数、retry、窗口及时性与终态；不包含 Token、连接串、
+完整请求/响应或原始行。五分钟排障顺序：
+
+1. `prefect flow-run inspect <id>` 查看 Flow 运行状态与日志；
+2. 查 `market_data_sync_run`（按 `data_kind`、目标交易日、状态）确认权威结果；
+3. 查 `market_data_sync_attempt` 确认尝试计数、提取计数与 `error_category`；
+4. 查 `market_data_sync_issue` 确认脱敏质量问题样本；
+5. 查 ClickHouse 业务表确认目标交易日行数与 `updated_at` 版本；
+6. 检查 JSONL 日志的窗口及时性（复权因子开盘前、日线/基本面/周月线当日终态）。
+
+安全停止时暂停 Deployment 或停止 Worker，不要删除数据库卷；任何 Token 或连接串
+不得进入日志、错误摘要或业务表。
+
+### 上线门禁
+
+用部署账户或供应商沙箱验证四个接口的权限、积分门槛（最低 2,000 积分）、频率限制，
+以及 `daily`/`adj_factor`/`daily_basic` 按 `trade_date` 全市场返回与
+`stk_week_month_adj` 按 `freq` + 周期最后交易日返回的行为；验证失败时不得启用
+对应数据类。验证通过后完成 2024-01-01 起的五类数据初始化回补，再进入当日增量。

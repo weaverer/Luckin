@@ -1,43 +1,46 @@
-# 规格质量检查清单：A 股多周期趋势研究行情数据
+# Specification Quality Checklist: A股行情数据交易日同步
 
-**目的**：在进入规划前验证规格的完整性和质量
-**创建日期**：2026-07-29
-**功能**：[spec.md](../spec.md)
+**Purpose**: Validate specification completeness and quality before proceeding to planning
+**Created**: 2026-08-01
+**Feature**: [spec.md](../spec.md)
 
-## 内容质量
+## Content Quality
 
-- [x] 无实现细节（语言、框架、API）
-- [x] 聚焦用户价值和业务需求
-- [x] 面向非技术利益相关者编写
-- [x] 所有必填章节均已完成
+- [x] No implementation details (languages, frameworks, APIs)
+- [x] Focused on user value and business needs
+- [x] Written for non-technical stakeholders
+- [x] All mandatory sections completed
 
-## 需求完整性
+## Requirement Completeness
 
-- [x] 不存在待澄清标记
-- [x] 需求可测试且无歧义
-- [x] 成功标准可度量
-- [x] 成功标准与技术实现无关
-- [x] 所有验收场景均已定义
-- [x] 已识别边界情况
-- [x] 范围边界清晰
-- [x] 已识别依赖项和假设
-- [x] 第三方数据依赖定义了供应商无关语义、失败行为和替换约束
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
+- [x] Success criteria are measurable
+- [x] Success criteria are technology-agnostic (no implementation details)
+- [x] All acceptance scenarios are defined
+- [x] Edge cases are identified
+- [x] Scope is clearly bounded
+- [x] Dependencies and assumptions identified
 
-## 功能就绪度
+## Feature Readiness
 
-- [x] 所有功能需求均有明确的验收依据
-- [x] 用户场景覆盖主要流程
-- [x] 功能符合成功标准中定义的可度量结果
-- [x] 规格未泄漏实现细节
+- [x] All functional requirements have clear acceptance criteria
+- [x] User scenarios cover primary flows
+- [x] Feature meets measurable outcomes defined in Success Criteria
+- [x] No implementation details leak into specification
 
-## 备注
+## Validation Notes (2026-08-01)
 
-- 第 1 轮校验：全部 17 项通过，无待澄清标记。
-- 已逐项覆盖 `daily`、`adj_factor`、`daily_basic` 和 `stk_week_month_adj`
-  的保留/排除字段、业务唯一性、单位及来源空值语义。
-- 已明确周线/月线只能使用直接周期行情，禁止日线聚合、重算、修正或覆盖。
-- 已明确三种价格口径、前复权截止时点、交易日历驱动的周期完成规则，
-  以及默认排除未完成周期。
-- 已覆盖幂等重跑、部分返回、停牌或待核验缺失、来源故障、历史修订和质量审计。
-- `daily`、`adj_factor` 等接口名称属于用户给定的外部数据依赖和验收约束；
-  规格未规定语言、框架、存储实现或内部代码结构，下游业务语义保持供应商无关。
+- 规格全文使用简体中文，技术无关；供应商专有名词（Tushare 接口名、字段名）仅出现在
+  外部数据依赖（ED）与假设章节，符合项目宪章 I/II 与模板约束。
+- 未使用 [NEEDS CLARIFICATION] 标记：四个接口的调用时机、频率限制、数据范围均来自
+  用户提供的接口文档，其余细节（存储、回补策略、调度精确时点）采用与金股功能一致的
+  合理默认并记录在假设章节。
+- 成功标准均为可度量、可验证、技术无关的表述（百分比、次数、时长、审计范围）。
+- FR-002 至 FR-005 的"窗口内形成终态"表述经核验与用户提供的接口文档一致。
+- 边界情况覆盖：停牌、非交易日、空响应区分、单次上限循环提取、积分门槛、字段新增、
+  盘前窗口错过、四接口独立性、中断恢复、历史补同步。
+
+## Notes
+
+- Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
