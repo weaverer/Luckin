@@ -448,7 +448,8 @@ def test_rate_limited_sync_fails_without_touching_existing_data(
         assert getattr(excinfo.value, "category", "") == "PROVIDER_RATE_LIMITED"
         # 失败后 ClickHouse 无任何写入（不可见半批），MySQL run 保持 FAILED
         assert client.execute(
-            f"SELECT count() FROM {table} WHERE trade_date = '{target.isoformat()}'"
+            f"SELECT count() FROM {table} WHERE trade_date = '{target.isoformat()}' "
+                "AND stock_id LIKE 'drill-%'"
         )[0]["count()"] == 0
         runs = failing.list_runs(data_kind=DataKind.DAILY_QUOTE, status="FAILED")
         assert len(runs) == 1
@@ -458,7 +459,7 @@ def test_rate_limited_sync_fails_without_touching_existing_data(
         assert result.added_count == _STOCK_COUNT
     finally:
         client.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date = '{target.isoformat()}' "
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'drill-%' "
             "SETTINGS mutations_sync = 1"
         )
 
@@ -481,7 +482,8 @@ def test_clickhouse_unreachable_keeps_run_non_succeeded_and_retry_converges(
         runs = service.list_runs(data_kind=DataKind.ADJ_FACTOR)
         assert runs and runs[0].status == "FAILED"
         assert client.execute(
-            f"SELECT count() FROM {table} WHERE trade_date = '{target.isoformat()}'"
+            f"SELECT count() FROM {table} WHERE trade_date = '{target.isoformat()}' "
+                "AND stock_id LIKE 'drill-%'"
         )[0]["count()"] == 0
         # 恢复后同一批次键重试收敛
         result = service.sync(
@@ -496,7 +498,7 @@ def test_clickhouse_unreachable_keeps_run_non_succeeded_and_retry_converges(
         assert result.added_count == _STOCK_COUNT
     finally:
         client.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date = '{target.isoformat()}' "
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'drill-%' "
             "SETTINGS mutations_sync = 1"
         )
 
@@ -521,13 +523,15 @@ def test_nfr009_daily_failure_does_not_block_other_kinds(
         assert basic.status is SyncStatus.SUCCEEDED
         assert client.execute(
             f"SELECT count() FROM {client.database}.adj_factor "
-            f"WHERE trade_date = '{target.isoformat()}'"
+            f"WHERE trade_date = '{target.isoformat()}' AND stock_id LIKE 'drill-%'"
         )[0]["count()"] == _STOCK_COUNT
         assert client.execute(
-            f"SELECT count() FROM {basic_table} WHERE trade_date = '{target.isoformat()}'"
+            f"SELECT count() FROM {basic_table} WHERE trade_date = '{target.isoformat()}' "
+                "AND stock_id LIKE 'drill-%'"
         )[0]["count()"] == _STOCK_COUNT
         assert client.execute(
-            f"SELECT count() FROM {daily_table} WHERE trade_date = '{target.isoformat()}'"
+            f"SELECT count() FROM {daily_table} WHERE trade_date = '{target.isoformat()}' "
+                "AND stock_id LIKE 'drill-%'"
         )[0]["count()"] == 0
     finally:
         for table in (daily_table, basic_table, f"{client.database}.adj_factor"):

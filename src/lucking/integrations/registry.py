@@ -16,6 +16,7 @@ from lucking.ports.broker_recommendation_provider import (
 )
 from lucking.ports.daily_basic_provider import DailyBasicProvider
 from lucking.ports.daily_quote_provider import DailyQuoteProvider
+from lucking.ports.index_factor_common import IndexFactorProvider
 from lucking.ports.market_data_common import (
     ProviderConfigurationError as MarketDataProviderConfigurationError,
 )
@@ -36,6 +37,7 @@ StockListProviderFactory = Callable[[Settings], StockListProvider]
 BrokerRecommendationProviderFactory = Callable[[Settings], BrokerRecommendationProvider]
 DailyQuoteProviderFactory = Callable[[Settings], DailyQuoteProvider]
 AdjFactorProviderFactory = Callable[[Settings], AdjFactorProvider]
+IndexFactorProviderFactory = Callable[[Settings], IndexFactorProvider]
 DailyBasicProviderFactory = Callable[[Settings], DailyBasicProvider]
 KlineProviderFactory = Callable[[Settings], WeeklyMonthlyKlineProvider]
 
@@ -335,3 +337,53 @@ def build_tushare_kline_provider(settings: Settings) -> WeeklyMonthlyKlineProvid
 
 register_daily_basic_provider("tushare", build_tushare_daily_basic_provider)
 register_kline_provider("tushare", build_tushare_kline_provider)
+
+
+INDEX_FACTOR_PROVIDERS: dict[str, IndexFactorProviderFactory] = {}
+
+
+def register_index_factor_provider(
+    provider_code: str, factory: IndexFactorProviderFactory
+) -> None:
+    normalized = provider_code.strip().lower()
+    if not normalized:
+        raise ValueError("Provider code 不能为空")
+    INDEX_FACTOR_PROVIDERS[normalized] = factory
+
+
+def build_index_factor_provider(
+    provider_code: str, settings: Settings
+) -> IndexFactorProvider:
+    normalized = provider_code.strip().lower()
+    try:
+        factory = INDEX_FACTOR_PROVIDERS[normalized]
+    except KeyError as exc:
+        raise MarketDataProviderConfigurationError(
+            normalized or "<empty>", "Provider 未注册"
+        ) from exc
+    return factory(settings)
+
+
+def build_tushare_index_factor_provider(settings: Settings) -> IndexFactorProvider:
+    from lucking.integrations.tushare.index_factor_provider import (
+        TushareIndexFactorProvider,
+    )
+    from lucking.logging import JsonlLogStore
+
+    try:
+        token = settings.require_tushare_token()
+    except ValueError as exc:
+        raise MarketDataProviderConfigurationError("tushare", "缺少所需秘密配置") from exc
+    log_store = JsonlLogStore(
+        settings.index_factor_log_dir,
+        filename=settings.index_factor_log_filename,
+    )
+    return TushareIndexFactorProvider(
+        TushareClient(token=token, api_url=settings.tushare_api_url),
+        page_limit=settings.index_factor_page_limit,
+        rate_per_minute=settings.index_factor_rate_limit_per_minute,
+        event_sink=log_store.write,
+    )
+
+
+register_index_factor_provider("tushare", build_tushare_index_factor_provider)

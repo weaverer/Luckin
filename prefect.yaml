@@ -216,3 +216,36 @@ deployments:
       name: local-pool
       work_queue_name: default
       job_variables: {}
+
+  - name: index-factor-sync
+    version: "1"
+    tags: [index-factor]
+    description: 每个交易日北京时间 17:00 同步全部指数技术因子（30 次/分钟限流）。
+    entrypoint: src/lucking/flows/index_factor.py:index_factor_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 17 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: index-factor-sync
+        active: true
+        parameters:
+          schedule_slug: index-factor-sync
+
+  - name: index-factor-backfill
+    version: "1"
+    tags: [index-factor, backfill]
+    description: 人工按交易日区间回补指数技术因子（2024-01-01 起，逐日幂等，全程 ≤30 次/分钟）。
+    entrypoint: src/lucking/flows/index_factor.py:index_factor_backfill
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}

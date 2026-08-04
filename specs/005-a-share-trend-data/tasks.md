@@ -349,3 +349,14 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+
+---
+
+## 阶段 7：收敛
+
+- [ ] T051 用部署账户实测周/月线在非周期边界日（周一~周四、月初~月末）请求时
+  `stk_week_month_adj` 返回的周期最后交易日行为，确认与契约"不晚于请求交易日"
+  校验一致（不一致则按实测调整周期归属口径）per ED-008（partial）
+- [ ] T052 用部署账户或供应商沙箱实测四个接口的续取参数（limit/offset：位置前进、
+  满页续取、短页终止）有效性，验证通过后方可启用
+  `MARKET_DATA_TUSHARE_PAGINATION_ENABLED=true` per FR-017 / SC-002 / plan 决策 4（partial）

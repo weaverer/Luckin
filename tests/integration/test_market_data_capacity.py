@@ -105,7 +105,13 @@ def _build_service(
 
 
 def _count(clickhouse: ClickHouseClient, data_kind: DataKind, target: date) -> int:
-    return MarketDataClickHouseRepository(clickhouse).count(data_kind, target)
+    from lucking.repositories.market_data_clickhouse import TABLE_BY_KIND
+    table = TABLE_BY_KIND[data_kind]
+    rows = clickhouse.execute(
+        f"SELECT count() AS n FROM {clickhouse.database}.{table} FINAL "
+        f"WHERE trade_date = '{target.isoformat()}' AND stock_id LIKE 'cap-%'"
+    )
+    return int(rows[0]["n"])
 
 
 def _backfill(
@@ -140,7 +146,7 @@ def test_full_market_capacity_and_thirty_repeat_syncs_produce_no_duplicates(
         assert _count(clickhouse, DataKind.DAILY_QUOTE, target) == _MARKET_COUNT
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date = '{target.isoformat()}' "
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'cap-%' "
             "SETTINGS mutations_sync = 1"
         )
 
@@ -164,14 +170,13 @@ def test_representative_trade_date_set_backfill_is_per_day_independent(
         assert _count(clickhouse, DataKind.WEEKLY_KLINE, weekly_period) == _MARKET_COUNT
         assert _count(clickhouse, DataKind.MONTHLY_KLINE, weekly_period) == 0
     finally:
-        for day in _TRADE_DAYS:
-            clickhouse.execute_ddl(
-                f"ALTER TABLE {table} DELETE WHERE trade_date = '{day.isoformat()}' "
-                "SETTINGS mutations_sync = 1"
-            )
+        clickhouse.execute_ddl(
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'cap-%' "
+            "SETTINGS mutations_sync = 1"
+        )
         clickhouse.execute_ddl(
             f"ALTER TABLE {clickhouse.database}.weekly_kline "
-            f"DELETE WHERE trade_date = '{weekly_period}' SETTINGS mutations_sync = 1"
+            f"DELETE WHERE stock_id LIKE 'cap-%' SETTINGS mutations_sync = 1"
         )
 
 

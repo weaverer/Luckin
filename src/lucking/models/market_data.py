@@ -32,6 +32,7 @@ class DataKind(StrEnum):
     DAILY_BASIC = "DAILY_BASIC"
     WEEKLY_KLINE = "WEEKLY_KLINE"
     MONTHLY_KLINE = "MONTHLY_KLINE"
+    INDEX_FACTOR = "INDEX_FACTOR"
 
 
 class VenueCode(StrEnum):

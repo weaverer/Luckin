@@ -96,18 +96,18 @@ def sync_broker_recommendations(
         raise
     completed_at = datetime.now(UTC)
     payload = _serialize_result(result)
-    logs.write(
-        "broker_recommendation_validation_completed",
-        **common,
-        **payload,
-        completed_at=completed_at,
+    validation_fields = _merge_log_fields(
+        common,
+        payload,
+        {"completed_at": completed_at},
     )
     logs.write(
-        "broker_recommendation_sync_succeeded",
-        **common,
-        **payload,
-        completed_at=completed_at,
-        **asdict(
+        "broker_recommendation_validation_completed",
+        **validation_fields,
+    )
+    success_fields = _merge_log_fields(
+        validation_fields,
+        asdict(
             calculate_schedule_timing(
                 actual_scheduled_at,
                 started_at,
@@ -115,6 +115,10 @@ def sync_broker_recommendations(
                 target_ms=settings.broker_recommendation_timeliness_target_ms,
             )
         ),
+    )
+    logs.write(
+        "broker_recommendation_sync_succeeded",
+        **success_fields,
     )
     return payload
 
@@ -220,6 +224,14 @@ def _serialize_result(result: BrokerRecommendationSyncResult) -> dict[str, Any]:
         elif hasattr(value, "value"):
             payload[key] = value.value
     return payload
+
+
+def _merge_log_fields(*groups: dict[str, Any]) -> dict[str, Any]:
+    """Merge log field groups before keyword expansion; later groups win."""
+    merged: dict[str, Any] = {}
+    for group in groups:
+        merged.update(group)
+    return merged
 
 
 def _log_store(settings: Settings) -> JsonlLogStore:

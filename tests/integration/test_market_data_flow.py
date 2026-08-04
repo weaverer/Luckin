@@ -126,8 +126,19 @@ def _build_service(
     )
 
 
-def _count(clickhouse: ClickHouseClient, data_kind: DataKind, target: date) -> int:
-    return MarketDataClickHouseRepository(clickhouse).count(data_kind, target)
+def _count(
+    clickhouse: ClickHouseClient,
+    data_kind: DataKind,
+    target: date,
+    prefix: str = "it-",
+) -> int:
+    from lucking.repositories.market_data_clickhouse import TABLE_BY_KIND
+    table = TABLE_BY_KIND[data_kind]
+    rows = clickhouse.execute(
+        f"SELECT count() AS n FROM {clickhouse.database}.{table} FINAL "
+        f"WHERE trade_date = '{target.isoformat()}' AND stock_id LIKE '{prefix}%'"
+    )
+    return int(rows[0]["n"])
 
 
 def _backfill(
@@ -169,11 +180,11 @@ def test_full_market_daily_quote_and_adj_factor_publish_idempotently(
         assert _count(clickhouse, DataKind.ADJ_FACTOR, _TARGET) == _MARKET_COUNT
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date = '{_TARGET}' "
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
         clickhouse.execute_ddl(
-            f"ALTER TABLE {clickhouse.database}.adj_factor DELETE WHERE trade_date = '{_TARGET}' "
+            f"ALTER TABLE {clickhouse.database}.adj_factor DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
 
@@ -199,7 +210,7 @@ def test_suspended_stocks_produce_no_rows_and_sync_still_succeeds(
         assert all(row["stock_id"] for row in rows)
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date = '{_TARGET}' "
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
 
@@ -224,7 +235,7 @@ def test_scheduled_sync_on_marker_trade_day_and_skip_on_weekend(
         assert _count(clickhouse, DataKind.DAILY_QUOTE, _TARGET) == _MARKET_COUNT
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date = '{_TARGET}' "
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
 
@@ -273,15 +284,15 @@ def test_daily_basic_loss_making_nulls_and_kline_tables_stay_independent(
         assert _count(clickhouse, DataKind.WEEKLY_KLINE, weekly_period) == _MARKET_COUNT
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {daily_basic_table} DELETE WHERE trade_date = '{_TARGET}' "
+            f"ALTER TABLE {daily_basic_table} DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
         clickhouse.execute_ddl(
-            f"ALTER TABLE {weekly_table} DELETE WHERE trade_date = '{weekly_period}' "
+            f"ALTER TABLE {weekly_table} DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
         clickhouse.execute_ddl(
-            f"ALTER TABLE {monthly_table} DELETE WHERE trade_date = '{monthly_period}' "
+            f"ALTER TABLE {monthly_table} DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
 
@@ -340,8 +351,8 @@ def test_backfill_flow_expands_by_trade_days_and_is_idempotent(
             assert _count(clickhouse, DataKind.DAILY_QUOTE, day) == _MARKET_COUNT
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date >= '2024-01-02' "
-            "AND trade_date <= '2024-01-04' SETTINGS mutations_sync = 1"
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'it-%' "
+            "SETTINGS mutations_sync = 1"
         )
 
 
@@ -402,8 +413,8 @@ def test_backfill_flow_failed_day_retries_same_run(
         assert _count(clickhouse, DataKind.DAILY_QUOTE, date(2024, 1, 3)) == _MARKET_COUNT
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {table} DELETE WHERE trade_date >= '2024-01-02' "
-            "AND trade_date <= '2024-01-03' SETTINGS mutations_sync = 1"
+            f"ALTER TABLE {table} DELETE WHERE stock_id LIKE 'it-%' "
+            "SETTINGS mutations_sync = 1"
         )
 
 
@@ -429,7 +440,7 @@ def test_five_data_kinds_share_no_runs_and_schedule_skip_on_non_trade_day(
         assert _count(clickhouse, DataKind.DAILY_BASIC, _TARGET) == _MARKET_COUNT
     finally:
         clickhouse.execute_ddl(
-            f"ALTER TABLE {clickhouse.database}.daily_basic DELETE WHERE trade_date = '{_TARGET}' "
+            f"ALTER TABLE {clickhouse.database}.daily_basic DELETE WHERE stock_id LIKE 'it-%' "
             "SETTINGS mutations_sync = 1"
         )
 

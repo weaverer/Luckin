@@ -54,6 +54,14 @@ class Settings(BaseSettings):
     market_data_page_limit: int = 6000
     market_data_max_pages: int = 10
     market_data_tushare_pagination_enabled: bool = False
+    index_factor_provider: str = "tushare"
+    index_factor_timezone: str = "Asia/Shanghai"
+    index_factor_log_dir: Path = Path("logs")
+    index_factor_log_filename: str = "index-factor-sync.jsonl"
+    index_factor_fetch_deadline_seconds: int = 1500
+    index_factor_run_lease_seconds: int = 2100
+    index_factor_page_limit: int = 8000
+    index_factor_rate_limit_per_minute: int = 30
     clickhouse_host: str = "127.0.0.1"
     clickhouse_port: int = 8123
     clickhouse_database: str = "lucking"
@@ -68,6 +76,7 @@ class Settings(BaseSettings):
         "adj_factor_provider",
         "daily_basic_provider",
         "kline_provider",
+        "index_factor_provider",
     )
     @classmethod
     def normalize_provider(cls, value: str) -> str:
@@ -88,6 +97,7 @@ class Settings(BaseSettings):
         "stock_list_timezone",
         "broker_recommendation_timezone",
         "market_data_timezone",
+        "index_factor_timezone",
     )
     @classmethod
     def validate_timezone(cls, value: str) -> str:
@@ -142,6 +152,18 @@ class Settings(BaseSettings):
             raise ValueError("行情数据数值配置必须大于 0")
         return value
 
+    @field_validator(
+        "index_factor_fetch_deadline_seconds",
+        "index_factor_run_lease_seconds",
+        "index_factor_page_limit",
+        "index_factor_rate_limit_per_minute",
+    )
+    @classmethod
+    def validate_positive_index_factor_setting(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("指数因子数值配置必须大于 0")
+        return value
+
     @field_validator("clickhouse_port")
     @classmethod
     def validate_clickhouse_port(cls, value: int) -> int:
@@ -172,6 +194,18 @@ class Settings(BaseSettings):
             raise ValueError("运行租约必须大于 Provider 截止时间")
         if self.broker_recommendation_backfill_max_months != 120:
             raise ValueError("BROKER_RECOMMENDATION_BACKFILL_MAX_MONTHS 固定为 120")
+        return self
+
+    @model_validator(mode="after")
+    def validate_index_factor_invariants(self) -> "Settings":
+        if self.index_factor_page_limit != 8000:
+            raise ValueError("INDEX_FACTOR_PAGE_LIMIT 固定为 8000")
+        if self.index_factor_run_lease_seconds != 2100:
+            raise ValueError("INDEX_FACTOR_RUN_LEASE_SECONDS 固定为 2100")
+        if self.index_factor_rate_limit_per_minute != 30:
+            raise ValueError("INDEX_FACTOR_RATE_LIMIT_PER_MINUTE 固定为 30")
+        if self.index_factor_run_lease_seconds <= self.index_factor_fetch_deadline_seconds:
+            raise ValueError("运行租约必须大于 Provider 截止时间")
         return self
 
     def require_tushare_token(self) -> str:

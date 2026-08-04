@@ -41,6 +41,7 @@ MARKET_DATA_ISSUE_CATEGORIES: frozenset[str] = frozenset(
         "PERIOD_MISMATCH",
         "INVALID_FIELD",
         "UNKNOWN_STOCK_IDENTITY",
+        "UNKNOWN_INDEX_IDENTITY",
         "IDENTITY_CONFLICT",
         "DUPLICATE",
         "RECORD_CONFLICT",

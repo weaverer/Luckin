@@ -289,8 +289,117 @@ COMMENT 'A股每日基本面指标'
 }
 
 
+# 指数技术因子 78 列（来源字段去掉 _bfq 后缀；均不复权，缺失以 NULL 保存）。
+# 与 data-model.md §3.4、tushare-index-factor.md §3 一致。
+_INDEX_FACTOR_COLUMNS: list[tuple[str, str]] = [
+    *[(f"ma_{n}", f"简单移动平均（{n} 日）") for n in (5, 10, 20, 30, 60, 90, 250)],
+    *[(f"ema_{n}", f"指数移动平均（{n} 日）") for n in (5, 10, 20, 30, 60, 90, 250)],
+    ("expma_12", "指数平均数（12 日）"),
+    ("expma_50", "指数平均数（50 日）"),
+    ("bbi", "BBI 多空指标"),
+    ("macd", "MACD 值"),
+    ("macd_dea", "MACD 信号线（DEA）"),
+    ("macd_dif", "MACD 差离值（DIF）"),
+    ("kdj", "KDJ 随机指标"),
+    ("kdj_k", "KDJ K 线"),
+    ("kdj_d", "KDJ D 线"),
+    *[(f"rsi_{n}", f"相对强弱指标 RSI（{n} 日）") for n in (6, 12, 24)],
+    ("cci", "CCI 顺势指标"),
+    ("wr", "威廉指标（WR）"),
+    ("wr1", "威廉指标（WR1）"),
+    ("bias1", "BIAS 乖离率（1）"),
+    ("bias2", "BIAS 乖离率（2）"),
+    ("bias3", "BIAS 乖离率（3）"),
+    ("psy", "心理线 PSY"),
+    ("psyma", "心理线均值"),
+    ("roc", "变动率 ROC"),
+    ("maroc", "变动率均值"),
+    ("mfi", "MFI 资金流量指标"),
+    ("mtm", "动量指标 MTM"),
+    ("mtmma", "动量指标均值"),
+    ("boll_lower", "布林带下轨"),
+    ("boll_mid", "布林中轨"),
+    ("boll_upper", "布林带上轨"),
+    ("ktn_down", "肯特纳通道下轨"),
+    ("ktn_mid", "肯特纳通道中轨"),
+    ("ktn_upper", "肯特纳通道上轨"),
+    ("taq_up", "唐安奇（海龟）通道上轨"),
+    ("taq_mid", "唐安奇（海龟）通道中轨"),
+    ("taq_down", "唐安奇（海龟）通道下轨"),
+    ("xsii_td1", "薛斯通道 II（1）"),
+    ("xsii_td2", "薛斯通道 II（2）"),
+    ("xsii_td3", "薛斯通道 II（3）"),
+    ("xsii_td4", "薛斯通道 II（4）"),
+    ("dmi_pdi", "动向指标 +DI"),
+    ("dmi_mdi", "动向指标 -DI"),
+    ("dmi_adx", "动向指标 ADX"),
+    ("dmi_adxr", "动向指标 ADXR"),
+    ("obv", "能量潮 OBV"),
+    ("vr", "VR 容量比率"),
+    ("emv", "简易波动 EMV"),
+    ("maemv", "简易波动均值"),
+    ("cr", "CR 价格动量"),
+    ("brar_ar", "BRAR 情绪指标 AR"),
+    ("brar_br", "BRAR 情绪指标 BR"),
+    ("dpo", "区间震荡线 DPO"),
+    ("madpo", "区间震荡线均值"),
+    ("dfma_dif", "平行线差"),
+    ("dfma_difma", "平行线差均值"),
+    ("asi", "振动升降指标 ASI"),
+    ("asit", "振动升降指标均值"),
+    ("atr", "真实波幅均值 ATR"),
+    ("mass", "梅斯线 MASS"),
+    ("ma_mass", "梅斯线均值"),
+    ("trix", "三重指数平滑 TRIX"),
+    ("trma", "三重指数平滑均值"),
+]
+
+_FACTOR_DECIMAL_COLUMNS = "".join(
+    f"    {name} Nullable(Decimal(12,4)) COMMENT '{comment}',\n"
+    for name, comment in _INDEX_FACTOR_COLUMNS
+)
+_FACTOR_UINT_COLUMNS = "".join(
+    f"    {name} Nullable(UInt16) COMMENT '{comment}',\n"
+    for name, comment in (
+        ("updays", "连涨天数"),
+        ("downdays", "连跌天数"),
+        ("topdays", "当前最高价是近 N 周期内最高价的最大值（N 为周期数）"),
+        ("lowdays", "当前最低价是近 N 周期内最低价的最小值（N 为周期数）"),
+    )
+)
+
+
+def _index_factor_ddl() -> str:
+    return f"""
+CREATE TABLE IF NOT EXISTS {{database}}.index_factor
+(
+    trade_date Date NOT NULL COMMENT '交易日',
+    index_id FixedString(36) NOT NULL COMMENT '项目规范指数业务UUID',
+    index_code String NOT NULL COMMENT '规范指数代码（来源 ts_code，含后缀）',
+    open Nullable(Decimal(12,4)) COMMENT '开盘价（部分指数族不提供）',
+    high Nullable(Decimal(12,4)) COMMENT '最高价（部分指数族不提供）',
+    low Nullable(Decimal(12,4)) COMMENT '最低价（部分指数族不提供）',
+    close Decimal(12,4) NOT NULL COMMENT '收盘价（行情锚点）',
+    pre_close Nullable(Decimal(12,4)) COMMENT '昨收价（新基日指数等缺失）',
+    change Nullable(Decimal(12,4)) COMMENT '涨跌额',
+    pct_chg Nullable(Decimal(12,4)) COMMENT '涨跌幅（百分比）',
+    vol Nullable(Decimal(24,2)) COMMENT '成交量（手）',
+    amount Nullable(Decimal(24,2)) COMMENT '成交额（千元）',
+{_FACTOR_DECIMAL_COLUMNS}{_FACTOR_UINT_COLUMNS}
+    updated_at DateTime64(3) NOT NULL COMMENT '最近写入UTC时间（版本列）'
+)
+ENGINE = ReplacingMergeTree(updated_at)
+PARTITION BY toYYYYMM(trade_date)
+ORDER BY (trade_date, index_id)
+COMMENT '指数每日技术因子（不复权，含基础行情）'
+"""
+
+
+CLICKHOUSE_TABLE_DDL["index_factor"] = _index_factor_ddl()
+
+
 def migrate(settings: Settings) -> list[str]:
-    """创建五张 ClickHouse 业务表（幂等），返回创建的表名列表。"""
+    """创建六张 ClickHouse 业务表（幂等），返回创建的表名列表。"""
     client = build_clickhouse_client(settings)
     created: list[str] = []
     for name, ddl in CLICKHOUSE_TABLE_DDL.items():
@@ -326,7 +435,7 @@ def _json_value(value: Any) -> Any:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m lucking.clickhouse")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("migrate", help="创建五张 ClickHouse 业务表（幂等）")
+    subparsers.add_parser("migrate", help="创建六张 ClickHouse 业务表（幂等）")
     args = parser.parse_args(argv)
     if args.command == "migrate":
         settings = Settings()
