@@ -65,7 +65,7 @@ uv run python -m lucking.clickhouse migrate
 ### 3.1 复权因子（ADJ_FACTOR）
 
 ```bash
-uv run prefect deployment run "market-data-sync/adj-factor-sync" --param data_kind=ADJ_FACTOR
+uv run prefect deployment run "market-data-sync/复权因子同步" --param data_kind=ADJ_FACTOR
 ```
 
 预期：运行成功；`adj_factor` 表出现该交易日全市场因子记录；
@@ -74,7 +74,7 @@ uv run prefect deployment run "market-data-sync/adj-factor-sync" --param data_ki
 ### 3.2 日线（DAILY_QUOTE）
 
 ```bash
-uv run prefect deployment run "market-data-sync/daily-quote-sync" --param data_kind=DAILY_QUOTE
+uv run prefect deployment run "market-data-sync/日线行情同步" --param data_kind=DAILY_QUOTE
 ```
 
 预期：运行成功；`daily_quote` 表出现该交易日全市场未复权行情；
@@ -83,7 +83,7 @@ uv run prefect deployment run "market-data-sync/daily-quote-sync" --param data_k
 ### 3.3 基本面指标（DAILY_BASIC）
 
 ```bash
-uv run prefect deployment run "market-data-sync/daily-basic-sync" --param data_kind=DAILY_BASIC
+uv run prefect deployment run "market-data-sync/每日基本面同步" --param data_kind=DAILY_BASIC
 ```
 
 预期：运行成功；`daily_basic` 表出现该交易日全市场指标；
@@ -94,8 +94,8 @@ uv run prefect deployment run "market-data-sync/daily-basic-sync" --param data_k
 周线与月线为两个独立 Deployment、两个独立数据模型：
 
 ```bash
-uv run prefect deployment run "market-data-sync/weekly-kline-sync" --param data_kind=WEEKLY_KLINE
-uv run prefect deployment run "market-data-sync/monthly-kline-sync" --param data_kind=MONTHLY_KLINE
+uv run prefect deployment run "market-data-sync/周K线同步" --param data_kind=WEEKLY_KLINE
+uv run prefect deployment run "market-data-sync/月K线同步" --param data_kind=MONTHLY_KLINE
 ```
 
 预期：两个运行均成功；`weekly_kline` 表出现截至该交易日的最新周线、
@@ -105,7 +105,7 @@ uv run prefect deployment run "market-data-sync/monthly-kline-sync" --param data
 ## 4. 核心验证：回补与幂等
 
 ```bash
-uv run prefect deployment run "market-data-backfill/backfill" \
+uv run prefect deployment run "market-data-backfill/行情数据历史回补" \
   --param data_kind=DAILY_QUOTE \
   --param start_date=2024-01-02 --param end_date=2024-01-10 \
   --param backfill_batch_id=demo-20240801
@@ -123,7 +123,7 @@ uv run prefect deployment run "market-data-backfill/backfill" \
 
 ```bash
 # 选择一个已知的法定节假日（例如国庆节期间的工作日）
-uv run prefect deployment run "market-data-sync/daily-quote-sync" --param data_kind=DAILY_QUOTE
+uv run prefect deployment run "market-data-sync/日线行情同步" --param data_kind=DAILY_QUOTE
 ```
 
 预期：运行成功返回且状态为跳过（不调用来源接口，不产生业务运行）。
@@ -157,7 +157,7 @@ uv run prefect deployment run "market-data-sync/daily-quote-sync" --param data_k
 
 ## 8. 窗口及时性
 
-- 复权因子（9:00 启动）：在开盘前（来源文档约定 9:20 前）形成终态。
+- 复权因子（9:30 启动）：开盘后获取前一交易日因子，单请求快速收敛。
 - 日线（17:00 启动）与基本面（17:45 启动）：当日形成终态。
 - 周/月线（18:30 启动，日线同步完成之后）：当日形成终态。
 

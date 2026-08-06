@@ -101,10 +101,10 @@ Flow 必须尝试处理区间内全部月份；若任一月份失败，处理完
 ```
 
 创建后的 Flow/Deployment 全限定名称为
-`broker-recommendation-sync/default`。周末、节假日和非交易日不暂停。
+`broker-recommendation-sync/券商金股同步`。周末、节假日和非交易日不暂停。
 
 历史补跑 Flow 不创建 Cron；可注册为仅人工触发的
-`broker-recommendation-backfill/manual`。它必须拒绝空批次键、未来月份、
+`broker-recommendation-backfill/券商金股历史回补`。它必须拒绝空批次键、未来月份、
 开始月份晚于结束月份以及超过 120 个月的范围。
 
 ## 4. 并发与重试

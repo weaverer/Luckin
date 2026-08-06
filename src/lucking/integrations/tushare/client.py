@@ -45,6 +45,7 @@ class TushareError(RuntimeError):
 class TushareTable:
     fields: tuple[str, ...]
     rows: tuple[Mapping[str, Any], ...]
+    has_more: bool = False  # 响应信封级完整性标志（008 股东数据分页续取用）
 
 
 class TushareClient:
@@ -131,6 +132,7 @@ class TushareClient:
             items = data["items"]
         except (KeyError, TypeError) as exc:
             raise TushareError(TushareErrorCategory.INVALID_PAYLOAD, "响应缺少表格字段") from exc
+        has_more = bool(data.get("has_more", False))
         if not isinstance(response_fields, list) or not all(
             isinstance(field, str) for field in response_fields
         ):
@@ -147,7 +149,7 @@ class TushareClient:
             if not isinstance(item, list) or len(item) != len(response_fields):
                 raise TushareError(TushareErrorCategory.INVALID_PAYLOAD, "响应行列数量不匹配")
             rows.append(MappingProxyType(dict(zip(response_fields, item, strict=True))))
-        return TushareTable(tuple(response_fields), tuple(rows))
+        return TushareTable(tuple(response_fields), tuple(rows), has_more=has_more)
 
 
 def _classify_business_error(message: str) -> TushareErrorCategory:

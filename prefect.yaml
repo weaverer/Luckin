@@ -2,7 +2,7 @@ name: lucking
 prefect-version: "3"
 
 deployments:
-  - name: default
+  - name: 交易日历同步
     version: "1"
     tags: [trading-calendar]
     description: 同一个 Deployment 承载月度、年末和人工交易日历同步。
@@ -32,7 +32,7 @@ deployments:
           market_code: CN-S
           schedule_slug: year-end-next-year
 
-  - name: default
+  - name: 股票列表同步
     version: "1"
     tags: [stock-list]
     description: 每日北京时间 09:00 同步固定 CN-S 股票列表。
@@ -53,7 +53,7 @@ deployments:
           scope_code: CN-S
           schedule_slug: daily-stock-list
 
-  - name: default
+  - name: 券商金股同步
     version: "1"
     tags: [broker-recommendation]
     description: 每月 3 日和 4 日北京时间 12:00 同步当前月券商金股。
@@ -73,7 +73,7 @@ deployments:
         parameters:
           schedule_slug: monthly-broker-recommendations
 
-  - name: manual
+  - name: 券商金股历史回补
     version: "1"
     tags: [broker-recommendation, backfill]
     description: 人工逐月补跑券商金股，最多 120 个闭区间月份。
@@ -86,7 +86,7 @@ deployments:
       work_queue_name: default
       job_variables: {}
 
-  - name: manual
+  - name: 券商金股同步重试
     version: "1"
     tags: [broker-recommendation, retry]
     description: 按原 run_id 显式重试券商金股同步。
@@ -99,10 +99,10 @@ deployments:
       work_queue_name: default
       job_variables: {}
 
-  - name: adj-factor-sync
+  - name: 复权因子同步
     version: "1"
     tags: [market-data]
-    description: 每个交易日北京时间 09:00 同步全市场日线复权因子（开盘前完成）。
+    description: 每个交易日北京时间 09:30 同步全市场日线复权因子（目标日 = 前一交易日）。
     entrypoint: src/lucking/flows/market_data.py:market_data_sync
     concurrency_limit:
       limit: 1
@@ -112,7 +112,7 @@ deployments:
       work_queue_name: default
       job_variables: {}
     schedules:
-      - cron: "0 9 * * 1-5"
+      - cron: "30 9 * * 1-5"
         timezone: Asia/Shanghai
         slug: adj-factor-sync
         active: true
@@ -120,7 +120,7 @@ deployments:
           data_kind: ADJ_FACTOR
           schedule_slug: adj-factor-sync
 
-  - name: daily-quote-sync
+  - name: 日线行情同步
     version: "1"
     tags: [market-data]
     description: 每个交易日北京时间 17:00 同步全市场未复权日线行情。
@@ -141,7 +141,7 @@ deployments:
           data_kind: DAILY_QUOTE
           schedule_slug: daily-quote-sync
 
-  - name: daily-basic-sync
+  - name: 每日基本面同步
     version: "1"
     tags: [market-data]
     description: 每个交易日北京时间 17:45 同步全市场每日基本面指标。
@@ -162,7 +162,7 @@ deployments:
           data_kind: DAILY_BASIC
           schedule_slug: daily-basic-sync
 
-  - name: weekly-kline-sync
+  - name: 周K线同步
     version: "1"
     tags: [market-data]
     description: 每个交易日北京时间 18:30 同步全市场周K线（独立数据模型）。
@@ -183,7 +183,7 @@ deployments:
           data_kind: WEEKLY_KLINE
           schedule_slug: weekly-kline-sync
 
-  - name: monthly-kline-sync
+  - name: 月K线同步
     version: "1"
     tags: [market-data]
     description: 每个交易日北京时间 18:30 同步全市场月K线（独立数据模型）。
@@ -204,7 +204,7 @@ deployments:
           data_kind: MONTHLY_KLINE
           schedule_slug: monthly-kline-sync
 
-  - name: backfill
+  - name: 行情数据历史回补
     version: "1"
     tags: [market-data, backfill]
     description: 人工按交易日区间回补行情数据（2024-01-01 起，逐日幂等）。
@@ -217,11 +217,78 @@ deployments:
       work_queue_name: default
       job_variables: {}
 
-  - name: index-factor-sync
+  - name: 指数技术因子同步
     version: "1"
     tags: [index-factor]
-    description: 每个交易日北京时间 17:00 同步全部指数技术因子（30 次/分钟限流）。
+    description: 每个交易日北京时间 19:00 同步全部指数技术因子（30 次/分钟限流）。
     entrypoint: src/lucking/flows/index_factor.py:index_factor_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 19 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: index-factor-sync
+        active: true
+        parameters:
+          schedule_slug: index-factor-sync
+
+  - name: 指数技术因子历史回补
+    version: "1"
+    tags: [index-factor, backfill]
+    description: 人工按交易日区间回补指数技术因子（2024-01-01 起，逐日幂等，全程 ≤30 次/分钟）。
+    entrypoint: src/lucking/flows/index_factor.py:index_factor_backfill
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+
+  - name: 股票技术面因子交易日同步
+    version: "1"
+    tags: [stock-factor]
+    description: 每个交易日北京时间 19:00 同步全部 A 股技术面因子（30 次/分钟限流）。
+    entrypoint: src/lucking/flows/stock_factor.py:stock_factor_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 19 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: stock-factor-sync
+        active: true
+        parameters:
+          schedule_slug: stock-factor-sync
+
+  - name: 股票技术面因子历史回补
+    version: "1"
+    tags: [stock-factor, backfill]
+    description: 人工按交易日区间回补股票技术面因子（2024-01-01 起，逐日幂等，全程 ≤30 次/分钟）。
+    entrypoint: src/lucking/flows/stock_factor.py:stock_factor_backfill
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+
+  # ==== 008 股东数据（3 接口 × 增量/回补 = 6 个 Deployment；增量错峰 17:00/17:05/17:10）====
+  - name: 前十大股东交易日同步
+    version: "1"
+    tags: [shareholder-data]
+    description: 每个交易日北京时间 17:00 同步前十大股东新增披露（公告日全市场提取，400 次/分钟限流）。
+    entrypoint: src/lucking/flows/shareholder_data.py:top10_holders_sync
     concurrency_limit:
       limit: 1
       collision_strategy: ENQUEUE
@@ -232,16 +299,77 @@ deployments:
     schedules:
       - cron: "0 17 * * 1-5"
         timezone: Asia/Shanghai
-        slug: index-factor-sync
+        slug: top10-holders-sync
         active: true
         parameters:
-          schedule_slug: index-factor-sync
-
-  - name: index-factor-backfill
+          schedule_slug: top10-holders-sync
+  - name: 前十大流通股东交易日同步
     version: "1"
-    tags: [index-factor, backfill]
-    description: 人工按交易日区间回补指数技术因子（2024-01-01 起，逐日幂等，全程 ≤30 次/分钟）。
-    entrypoint: src/lucking/flows/index_factor.py:index_factor_backfill
+    tags: [shareholder-data]
+    description: 每个交易日北京时间 17:05 同步前十大流通股东新增披露（公告日全市场提取，400 次/分钟限流）。
+    entrypoint: src/lucking/flows/shareholder_data.py:top10_float_holders_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "5 17 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: top10-floatholders-sync
+        active: true
+        parameters:
+          schedule_slug: top10-floatholders-sync
+  - name: 股东人数交易日同步
+    version: "1"
+    tags: [shareholder-data]
+    description: 每个交易日北京时间 17:10 同步股东人数新增披露（公告日全市场提取，400 次/分钟限流）。
+    entrypoint: src/lucking/flows/shareholder_data.py:holder_count_sync
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "10 17 * * 1-5"
+        timezone: Asia/Shanghai
+        slug: holder-count-sync
+        active: true
+        parameters:
+          schedule_slug: holder-count-sync
+  - name: 前十大股东历史回补
+    version: "1"
+    tags: [shareholder-data, backfill]
+    description: 人工按报告期季度末回补前十大股东（2024-01-01 起，逐日幂等，全程 ≤400 次/分钟）。
+    entrypoint: src/lucking/flows/shareholder_data.py:top10_holders_backfill
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+  - name: 前十大流通股东历史回补
+    version: "1"
+    tags: [shareholder-data, backfill]
+    description: 人工按报告期季度末回补前十大流通股东（2024-01-01 起，逐日幂等，全程 ≤400 次/分钟）。
+    entrypoint: src/lucking/flows/shareholder_data.py:top10_float_holders_backfill
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables: {}
+  - name: 股东人数历史回补
+    version: "1"
+    tags: [shareholder-data, backfill]
+    description: 人工按公告日逐日回补股东人数（2024-01-01 起，逐日幂等，全程 ≤400 次/分钟）。
+    entrypoint: src/lucking/flows/shareholder_data.py:holder_count_backfill
     concurrency_limit:
       limit: 1
       collision_strategy: ENQUEUE

@@ -29,6 +29,8 @@ class ScheduledMarketDataSyncCommand:
 
 1. 从 `scheduled_for` 转换到 `Asia/Shanghai` 并确定目标交易日；
    查询交易日历（CN-S）：非交易日直接返回“跳过”结果，不调用 Provider。
+   ADJ_FACTOR 例外（09:30 开盘后获取）：目标交易日 = 计划日的前一个交易日
+   （当日因子收盘后才发布，2026-08-06 实测校准）；run_key/审计照常含该目标日。
 2. 以 `data_kind + SCHEDULED + schedule_slug + scheduled_for_utc + target_trade_date`
    计算 `run_key` 并幂等解析运行：`SUCCEEDED` 直接返回；`FAILED` 转换为
    Retry（引用原 `run_id` 新增 attempt）；`RUNNING` 且租约有效则报告进行中；

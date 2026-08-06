@@ -90,7 +90,7 @@ ORM（T004）与三方一致验证（T005）。
 **Goal**: 每个交易日北京时间 17:00，按交易日提取全部指数（大盘/申万/中信）技术因子与
 基础行情，自举注册指数身份，发布 ClickHouse `index_factor` 并完成 MySQL 审计终态。
 
-**Independent Test**: 对最近一个交易日触发 `index-factor-sync/daily-17`（显式
+**Independent Test**: 对最近一个交易日触发 `index-factor-sync/指数技术因子同步`（显式
 scheduled_at），预期：received = 该日全部指数、run SUCCEEDED、`index_factor` 按
 (trade_date, index_id) 可查（SELECT ... FINAL）、身份表自动注册；重复触发同一
 scheduled_at 幂等（第二次不重复处理）。非交易日触发 → SKIPPED_NOT_TRADING_DAY。
@@ -135,8 +135,8 @@ scheduled_at 幂等（第二次不重复处理）。非交易日触发 → SKIPP
   （retries=0；scheduled_at 从 prefect.runtime.flow_run.scheduled_start_time 读取、
   直接调用必须显式提供；schedule_slug 校验；非交易日 SKIPPED 成功结束；
   日志白名单不含 Token/签名/完整请求体，prefect-flow.md §1）
-- [x] T017 [US1] 在 `prefect.yaml` 增加 Deployment `index-factor-sync/daily-17`：
-  Cron `0 17 * * 1-5`（Asia/Shanghai）、work pool local-pool、
+- [x] T017 [US1] 在 `prefect.yaml` 增加 Deployment `index-factor-sync/指数技术因子同步`：
+  Cron `0 19 * * 1-5`（Asia/Shanghai）、work pool local-pool、
   concurrency_limit 1 + collision_strategy ENQUEUE、参数 schedule_slug
 
 **Checkpoint**: 用户故事 1 独立可测——MVP 完成，可部署演示
@@ -148,7 +148,7 @@ scheduled_at 幂等（第二次不重复处理）。非交易日触发 → SKIPP
 **Goal**: 通过人工回补 Flow 从 2024-01-01 逐交易日回补至当前增量，全程遵守
 每分钟 30 次限流，逐日独立终态、已成功日期跳过、失败日期可安全重试。
 
-**Independent Test**: 触发 `index-factor-backfill/backfill`（start/end/backfill_batch_id），
+**Independent Test**: 触发 `index-factor-backfill/指数技术因子历史回补`（start/end/backfill_batch_id），
 预期：逐日独立终态、请求间隔 ≥ 2 秒（≤ 30 次/分钟）；重复提交同 batch_id 已成功
 日期 SKIP（替身调用计数不增加）；非法区间（未来/反向/早于 2024-01-01）整体拒绝；
 与增量重叠日期同键幂等。
@@ -171,7 +171,7 @@ scheduled_at 幂等（第二次不重复处理）。非交易日触发 → SKIPP
   认领与终态（复用 T014 链路；依赖 T014）
 - [x] T020 [US2] 在 `src/lucking/flows/index_factor.py` 实现 `index_factor_backfill`
   Flow（start_date/end_date/backfill_batch_id 参数、retries=0），并在
-  `prefect.yaml` 增加人工 Deployment `index-factor-backfill/backfill`
+  `prefect.yaml` 增加人工 Deployment `index-factor-backfill/指数技术因子历史回补`
   （无 schedule；依赖 T019）
 - [x] T021 [US2] 集成测试 `tests/integration/test_index_factor_backfill.py`（-m mysql）：
   回补与增量重叠日期幂等（无重复记录）、中断恢复（部分成功后再跑只补失败日期）、

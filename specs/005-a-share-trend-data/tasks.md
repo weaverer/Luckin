@@ -135,8 +135,8 @@ contract/integration tests for interface changes and focused end-to-end tests fo
 - [X] T025 [US1] 实现 MarketDataService 计划同步（data_kind 参数化命令；
   发布语义：ClickHouse 写入成功后同一 MySQL 事务写 attempt/run 成功终态与全部计数）
   在 `src/lucking/services/market_data.py`
-- [X] T026 [US1] 实现 `market-data-sync` Flow 与 `adj-factor-sync`（Cron `0 9 * * 1-5`）、
-  `daily-quote-sync`（Cron `0 17 * * 1-5`）Deployment（Asia/Shanghai、并发 1、ENQUEUE、
+- [X] T026 [US1] 实现 `market-data-sync` Flow 与 `复权因子同步`（Cron `0 9 * * 1-5`）、
+  `日线行情同步`（Cron `0 17 * * 1-5`）Deployment（Asia/Shanghai、并发 1、ENQUEUE、
   retries=0、计划时点来自 Prefect runtime）在 `src/lucking/flows/market_data.py` 与 `prefect.yaml`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
@@ -182,8 +182,8 @@ MONTHLY_KLINE 计划同步，三表出现最新数据；亏损公司 PE/PB 为 N
   `src/lucking/integrations/tushare/weekly_monthly_kline_provider.py`
 - [X] T036 [US2] 扩展 MarketDataService 支持 DAILY_BASIC / WEEKLY_KLINE / MONTHLY_KLINE
   命令（复用 T025 的发布语义）在 `src/lucking/services/market_data.py`
-- [X] T037 [US2] 新增 `daily-basic-sync`（Cron `45 17 * * 1-5`）、`weekly-kline-sync`、
-  `monthly-kline-sync`（Cron `30 18 * * 1-5`）Deployment 在
+- [X] T037 [US2] 新增 `每日基本面同步`（Cron `45 17 * * 1-5`）、`周K线同步`、
+  `月K线同步`（Cron `30 18 * * 1-5`）Deployment 在
   `src/lucking/flows/market_data.py` 与 `prefect.yaml`
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently

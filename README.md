@@ -113,7 +113,7 @@ uv run alembic upgrade head
 
 ### Worker 与 Deployment
 
-`prefect.yaml` 定义一个 `trading-calendar-sync/default` Deployment：
+`prefect.yaml` 定义一个 `trading-calendar-sync/交易日历同步` Deployment：
 
 - `monthly-current-year`：每月 1 日 02:00，同步当月首日至当年末。
 - `year-end-next-year`：每年 12 月 20 日 02:30，同步下一自然年。
@@ -122,13 +122,13 @@ uv run alembic upgrade head
 
 ```bash
 uv run prefect worker start --pool local-pool --type process
-uv run prefect --no-prompt deploy --name trading-calendar-sync/default
+uv run prefect --no-prompt deploy --name trading-calendar-sync/交易日历同步
 ```
 
 人工补数示例：
 
 ```bash
-uv run prefect deployment run 'trading-calendar-sync/default' \
+uv run prefect deployment run 'trading-calendar-sync/交易日历同步' \
   --param mode=manual \
   --param market_code=CN-S \
   --param start_date=2026-01-01 \
@@ -212,20 +212,20 @@ TUSHARE_API_URL=https://api.tushare.pro
 uv sync --all-groups
 uv run alembic upgrade head
 uv run prefect worker start --pool local-pool --type process
-uv run prefect deploy --name sync-stock-list/default --no-prompt
+uv run prefect deploy --name sync-stock-list/股票列表同步 --no-prompt
 ```
 
-Deployment `stock-list-sync/default` 的计划 slug 为 `daily-stock-list`，Cron 为
+Deployment `stock-list-sync/股票列表同步` 的计划 slug 为 `daily-stock-list`，Cron 为
 `0 9 * * *`，时区为 `Asia/Shanghai`，并发限制为 1，冲突运行进入队列。
 Prefect 3.8 部署命令中的 `sync-stock-list` 是入口函数 `sync_stock_list` 的配置选择器；
-部署完成后的 Flow/Deployment 全限定名称仍为 `stock-list-sync/default`。
+部署完成后的 Flow/Deployment 全限定名称仍为 `stock-list-sync/股票列表同步`。
 
 ### 人工运行与失败补跑
 
 人工触发时使用明确的计划时点：
 
 ```bash
-uv run prefect deployment run 'stock-list-sync/default' \
+uv run prefect deployment run 'stock-list-sync/股票列表同步' \
   --param scope_code=CN-S \
   --param schedule_slug=manual-stock-list \
   --param scheduled_at=2026-07-27T09:00:00+08:00
@@ -260,7 +260,7 @@ Provider 专有标识只保存在映射表，不出现在当前列表查询结�
 tail -n 100 logs/stock-list-sync.jsonl
 rg '"event":"stock_list_sync_(succeeded|failed)"' logs/stock-list-sync.jsonl* | tail -n 30
 docker compose ps
-uv run prefect deployment schedule ls stock-list-sync/default
+uv run prefect deployment schedule ls stock-list-sync/股票列表同步
 ```
 
 五分钟排障顺序：
@@ -290,7 +290,7 @@ Service、Repository、Flow、固定 `CN-S` 范围和领域模型不依赖 Tusha
 
 ## 券商金股同步
 
-`broker-recommendation-sync/default` 在 `Asia/Shanghai` 每月 3、4 日 12:00
+`broker-recommendation-sync/券商金股同步` 在 `Asia/Shanghai` 每月 3、4 日 12:00
 运行，只调用 Tushare `broker_recommend` 的 `month,broker,ts_code,name` 四字段。
 4 日缺席的推荐不会删除；可信行按
 `recommendation_month + broker_name + stock_id` 幂等新增、更新或确认。
@@ -301,7 +301,7 @@ Service、Repository、Flow、固定 `CN-S` 范围和领域模型不依赖 Tusha
 `BROKER_RECOMMENDATION_TUSHARE_PAGINATION_ENABLED=true`。关闭时单页达到 1,000
 会安全失败，避免把截断数据当完整月份发布。
 
-历史补跑使用无 Cron 的 `broker-recommendation-backfill/manual`，传入月首
+历史补跑使用无 Cron 的 `broker-recommendation-backfill/券商金股历史回补`，传入月首
 `start_month`、`end_month` 和稳定 `backfill_batch_id`。闭区间最多 120 个月；
 121 个月、未来月份、反向范围会在创建任何 run 前整体拒绝。同批次成功月跳过，
 失败月或数据库 UTC 判断已过期的运行按原 `run_id` 转为 Retry；有效租约返回
@@ -311,7 +311,7 @@ Service、Repository、Flow、固定 `CN-S` 范围和领域模型不依赖 Tusha
 日志写入 `logs/broker-recommendation-sync.jsonl`，只含白名单业务 UUID、状态、分页
 证据和计数，不含 Token、连接串、原始响应或物理 BIGINT 主键。五分钟排障先关联
 Prefect Flow Run、`run_id`、`attempt_id`，再查看安全 `error_category` 和 issue；
-修复后调用 `broker-recommendation-retry/manual` 并传原 `run_id`。安全停止时暂停
+修复后调用 `broker-recommendation-retry/券商金股同步重试` 并传原 `run_id`。安全停止时暂停
 Deployment 或停止 Worker，不要删除数据库卷。
 
 单条推荐无法解析到 `stock_current` 时会写入脱敏 `UNKNOWN_STOCK_IDENTITY` issue、
@@ -362,13 +362,13 @@ uv run python -m lucking.clickhouse migrate
 ### Deployment
 
 `prefect.yaml` 定义五个 `market-data-sync` Deployment（`Asia/Shanghai`、
-并发 1、`ENQUEUE`、`retries=0`）：`adj-factor-sync`（`0 9 * * 1-5`）、
-`daily-quote-sync`（`0 17 * * 1-5`）、`daily-basic-sync`（`45 17 * * 1-5`）、
-`weekly-kline-sync` 与 `monthly-kline-sync`（`30 18 * * 1-5`），以及人工回补
-`market-data-backfill/backfill`。部署方式与其他功能一致：
+并发 1、`ENQUEUE`、`retries=0`）：`复权因子同步`（`0 9 * * 1-5`）、
+`日线行情同步`（`0 17 * * 1-5`）、`每日基本面同步`（`45 17 * * 1-5`）、
+`周K线同步` 与 `月K线同步`（`30 18 * * 1-5`），以及人工回补
+`market-data-backfill/行情数据历史回补`。部署方式与其他功能一致：
 
 ```bash
-uv run prefect --no-prompt deploy --name market-data-sync/adj-factor-sync
+uv run prefect --no-prompt deploy --name market-data-sync/复权因子同步
 ```
 
 每个 Flow 启动后按 Prefect runtime 原计划时点推导目标交易日并查询 CN-S 交易日历；
@@ -381,7 +381,7 @@ uv run prefect --no-prompt deploy --name market-data-sync/adj-factor-sync
 未来、反向范围在任何运行创建前拒绝）：
 
 ```bash
-uv run prefect deployment run 'market-data-backfill/backfill' \
+uv run prefect deployment run 'market-data-backfill/行情数据历史回补' \
   --param data_kind=DAILY_QUOTE \
   --param start_date=2024-01-01 --param end_date=2024-01-10 \
   --param backfill_batch_id=demo-20260801

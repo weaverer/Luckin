@@ -88,8 +88,8 @@ uv run prefect worker start --pool local-pool --type process
 在另一个终端注册 Deployment：
 
 ```bash
-uv run prefect --no-prompt deploy --name trading-calendar-sync/default
-uv run prefect deployment schedule ls trading-calendar-sync/default
+uv run prefect --no-prompt deploy --name trading-calendar-sync/交易日历同步
+uv run prefect deployment schedule ls trading-calendar-sync/交易日历同步
 ```
 
 预期存在两个启用的计划：
@@ -101,7 +101,7 @@ uv run prefect deployment schedule ls trading-calendar-sync/default
 
 ```bash
 uv run prefect deployment run \
-  'trading-calendar-sync/default' \
+  'trading-calendar-sync/交易日历同步' \
   --param mode=manual \
   --param market_code=CN-S \
   --param start_date=2026-01-01 \
@@ -299,9 +299,9 @@ Client 中不存在日历专有字段映射。
 暂停计划：
 
 ```bash
-uv run prefect deployment schedule ls trading-calendar-sync/default
+uv run prefect deployment schedule ls trading-calendar-sync/交易日历同步
 uv run prefect deployment schedule pause \
-  trading-calendar-sync/default \
+  trading-calendar-sync/交易日历同步 \
   <schedule-id>
 ```
 

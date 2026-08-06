@@ -194,7 +194,7 @@ PENDING → RUNNING → SUCCEEDED
 
 ## 决策 10：每日调度、日志与及时性
 
-**决策**：新增 `stock-list-sync/default` Deployment：
+**决策**：新增 `stock-list-sync/股票列表同步` Deployment：
 
 - Cron：`0 9 * * *`
 - 时区：`Asia/Shanghai`

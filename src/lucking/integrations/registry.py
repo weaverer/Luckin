@@ -20,6 +20,8 @@ from lucking.ports.index_factor_common import IndexFactorProvider
 from lucking.ports.market_data_common import (
     ProviderConfigurationError as MarketDataProviderConfigurationError,
 )
+from lucking.ports.shareholder_data_common import ShareholderDataProvider
+from lucking.ports.stock_factor_common import StockFactorProvider
 from lucking.ports.stock_list_provider import (
     ProviderConfigurationError as StockListProviderConfigurationError,
 )
@@ -38,6 +40,8 @@ BrokerRecommendationProviderFactory = Callable[[Settings], BrokerRecommendationP
 DailyQuoteProviderFactory = Callable[[Settings], DailyQuoteProvider]
 AdjFactorProviderFactory = Callable[[Settings], AdjFactorProvider]
 IndexFactorProviderFactory = Callable[[Settings], IndexFactorProvider]
+StockFactorProviderFactory = Callable[[Settings], StockFactorProvider]
+ShareholderDataProviderFactory = Callable[[Settings], ShareholderDataProvider]
 DailyBasicProviderFactory = Callable[[Settings], DailyBasicProvider]
 KlineProviderFactory = Callable[[Settings], WeeklyMonthlyKlineProvider]
 
@@ -387,3 +391,125 @@ def build_tushare_index_factor_provider(settings: Settings) -> IndexFactorProvid
 
 
 register_index_factor_provider("tushare", build_tushare_index_factor_provider)
+
+
+STOCK_FACTOR_PROVIDERS: dict[str, StockFactorProviderFactory] = {}
+
+
+def register_stock_factor_provider(
+    provider_code: str, factory: StockFactorProviderFactory
+) -> None:
+    normalized = provider_code.strip().lower()
+    if not normalized:
+        raise ValueError("Provider code 不能为空")
+    STOCK_FACTOR_PROVIDERS[normalized] = factory
+
+
+def build_stock_factor_provider(
+    provider_code: str, settings: Settings
+) -> StockFactorProvider:
+    normalized = provider_code.strip().lower()
+    try:
+        factory = STOCK_FACTOR_PROVIDERS[normalized]
+    except KeyError as exc:
+        raise MarketDataProviderConfigurationError(
+            normalized or "<empty>", "Provider 未注册"
+        ) from exc
+    return factory(settings)
+
+
+def build_tushare_stock_factor_provider(settings: Settings) -> StockFactorProvider:
+    from lucking.integrations.tushare.stock_factor_provider import (
+        TushareStockFactorProvider,
+    )
+    from lucking.logging import JsonlLogStore
+
+    try:
+        token = settings.require_tushare_token()
+    except ValueError as exc:
+        raise MarketDataProviderConfigurationError("tushare", "缺少所需秘密配置") from exc
+    log_store = JsonlLogStore(
+        settings.stock_factor_log_dir,
+        filename=settings.stock_factor_log_filename,
+    )
+    return TushareStockFactorProvider(
+        TushareClient(token=token, api_url=settings.tushare_api_url),
+        page_limit=settings.stock_factor_page_limit,
+        rate_per_minute=settings.stock_factor_rate_limit_per_minute,
+        event_sink=log_store.write,
+    )
+
+
+register_stock_factor_provider("tushare", build_tushare_stock_factor_provider)
+
+
+SHAREHOLDER_DATA_PROVIDERS: dict[str, ShareholderDataProviderFactory] = {}
+
+
+def register_shareholder_data_provider(
+    provider_code: str, factory: ShareholderDataProviderFactory
+) -> None:
+    normalized = provider_code.strip().lower()
+    if not normalized:
+        raise ValueError("Provider code 不能为空")
+    SHAREHOLDER_DATA_PROVIDERS[normalized] = factory
+
+
+def build_shareholder_data_provider(
+    provider_code: str, settings: Settings
+) -> ShareholderDataProvider:
+    normalized = provider_code.strip().lower()
+    try:
+        factory = SHAREHOLDER_DATA_PROVIDERS[normalized]
+    except KeyError as exc:
+        raise MarketDataProviderConfigurationError(
+            normalized or "<empty>", "Provider 未注册"
+        ) from exc
+    return factory(settings)
+
+
+def build_tushare_shareholder_data_provider(settings: Settings) -> ShareholderDataProvider:
+    from lucking.integrations.tushare.rate_limiter import Throttle
+    from lucking.integrations.tushare.redis_rate_limiter import RedisRateLimiter
+    from lucking.integrations.tushare.shareholder_data_provider import (
+        TushareShareholderDataProvider,
+    )
+    from lucking.logging import JsonlLogStore
+
+    try:
+        token = settings.require_tushare_token()
+    except ValueError as exc:
+        raise MarketDataProviderConfigurationError("tushare", "缺少所需秘密配置") from exc
+    log_store = JsonlLogStore(
+        settings.shareholder_data_log_dir,
+        filename=settings.shareholder_data_log_filename,
+    )
+    limiter: Throttle | None = None
+    if settings.shareholder_data_rate_limiter == "redis":
+        # 账户级共享预算（400/min 三接口合计，跨进程）：Redis 分布式节流器，
+        # 三接口的所有 flow run 进程共用同一预算（research 决策 4 修订）。
+        # Redis 不可达时内部降级为进程级限流（fail-open），不阻断同步。
+        from redis import Redis
+
+        limiter = RedisRateLimiter(
+            Redis.from_url(
+                settings.redis_url,
+                password=(
+                    settings.redis_password.get_secret_value()
+                    if settings.redis_password is not None
+                    else None
+                ),
+            ),
+            rate_per_minute=settings.shareholder_data_rate_limit_per_minute,
+            event_sink=log_store.write,
+        )
+    return TushareShareholderDataProvider(
+        TushareClient(token=token, api_url=settings.tushare_api_url),
+        page_limit=settings.shareholder_data_page_limit,
+        rate_per_minute=settings.shareholder_data_rate_limit_per_minute,
+        limiter=limiter,
+        event_sink=log_store.write,
+    )
+
+
+register_shareholder_data_provider("tushare", build_tushare_shareholder_data_provider)

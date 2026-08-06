@@ -13,7 +13,8 @@
 - 新增稳定 run key、数据库 UTC 固定 2,100 秒租约、原子发布、缺席不删除、
   业务键 upsert、失败 issue 和内部筛选查询。
 - 新增 `0 12 3,4 * *`、`Asia/Shanghai`、并发 1、`ENQUEUE` 的计划部署，
-  以及无 Cron 的 backfill/retry 部署。
+  以及无 Cron 的 `broker-recommendation-backfill/券商金股历史回补`、
+  `broker-recommendation-retry/券商金股同步重试` 部署。
 - 未新增公共 API、前端、ClickHouse 写入、Redis 缓存或 Tushare SDK。
 
 ## 2. 四表真实 DDL 与中文注释

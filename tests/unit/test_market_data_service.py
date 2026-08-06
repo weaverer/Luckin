@@ -348,7 +348,9 @@ def test_adj_factor_kind_writes_separate_run(
     )
     assert result.status is SyncStatus.SUCCEEDED
     assert result.data_kind is DataKind.ADJ_FACTOR
-    assert clickhouse.published == [(DataKind.ADJ_FACTOR, _TARGET, 3)]
+    # 09:00 开盘前执行：目标日 = 前一个交易日（7/27 周一 → 7/24 周五）
+    assert result.target_trade_date == date(2026, 7, 24)
+    assert clickhouse.published == [(DataKind.ADJ_FACTOR, date(2026, 7, 24), 3)]
     # 同一交易日不同数据类形成不同 run：日线再触发仍为新增
     first = service.sync(_scheduled())
     assert first.status is SyncStatus.SUCCEEDED

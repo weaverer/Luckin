@@ -60,7 +60,7 @@
 
 ## 决策 3：一个 Prefect Deployment，两个计划
 
-**决策**：建立 `trading-calendar-sync/default` Deployment，为同一 Flow 配置两个
+**决策**：建立 `trading-calendar-sync/交易日历同步` Deployment，为同一 Flow 配置两个
 Cron Schedule，并通过计划参数传入 `mode`：
 
 - `monthly`：`0 2 1 * *`，时区 `Asia/Shanghai`

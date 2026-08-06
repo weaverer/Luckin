@@ -28,12 +28,13 @@ def index_factor_sync(scheduled_at: str | None = None, schedule_slug: str | None
 
 | Deployment | Flow | Cron（Asia/Shanghai） | 参数 |
 |------------|------|----------------------|------|
-| `index-factor-sync/daily-17` | index-factor-sync | `0 17 * * 1-5` | `schedule_slug=index-factor-sync` |
+| `index-factor-sync/指数技术因子同步` | index-factor-sync | `0 19 * * 1-5` | `schedule_slug=index-factor-sync` |
 
 - Work pool `local-pool`；`concurrency_limit: 1` + `collision_strategy: ENQUEUE`
   （并发重入时排队，配合 MySQL run_key 幂等兜底，NFR-003）。
-- 17:00 为用户显式指定（spec FR-002、Clarifications 确认）；
-  数据更新时点文档未明确，上线门禁实测校准（research 待验证项 4）。
+- 19:00 为 2026-08-06 上线实测校准结果：17:00 上游 `idx_factor_pro` 当日数据尚未发布
+  （连续 4 日 EMPTY_AGGREGATE，23:00 实测已就绪）；数据更新时点文档未明确，仍属
+  上线门禁实测校准范围（research 待验证项 4）。
 
 ## 3. Flow `index-factor-backfill`（初始化回补）
 
@@ -51,7 +52,7 @@ def index_factor_backfill(
   target_trade_date`）→ 逐日独立终态（FR-003）。
 - 与增量同步共用同一 Service 与节流器（30 次/分钟全局生效，NFR-004）。
 - 人工触发，无 schedule；示例：
-  `uv run prefect deployment run "index-factor-backfill/backfill" --param start_date=20240101 --param end_date=20260731 --param backfill_batch_id=init-2026-08-02`。
+  `uv run prefect deployment run "index-factor-backfill/指数技术因子历史回补" --param start_date=20240101 --param end_date=20260731 --param backfill_batch_id=init-2026-08-02`。
 
 ## 4. 运维语义
 

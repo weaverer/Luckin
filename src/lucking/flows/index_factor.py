@@ -34,7 +34,7 @@ from lucking.services.index_factor import (
 
 # 与 market_data 回补起点一致；Clarifications 确认 2024-01-01。
 BACKFILL_START = date(2024, 1, 1)
-_WINDOW_TARGET_MS = 8 * 60 * 60 * 1000  # 17:00 启动当日形成终态
+_WINDOW_TARGET_MS = 8 * 60 * 60 * 1000  # 19:00 启动当日形成终态
 
 
 def _build_service(settings: Settings) -> IndexFactorService:
@@ -64,7 +64,7 @@ def index_factor_sync(
     scheduled_at: datetime | None = None,
     schedule_slug: str | None = None,
 ) -> dict[str, Any]:
-    """每个交易日北京时间 17:00 同步全部指数技术因子（spec FR-002）。"""
+    """每个交易日北京时间 19:00 同步全部指数技术因子（spec FR-002）。"""
     settings = Settings()
     actual_scheduled_at = scheduled_at or flow_run.scheduled_start_time
     if actual_scheduled_at is None:

@@ -34,12 +34,12 @@ uv run prefect deployment apply prefect.yaml
 
 预期：MySQL 迁移包含 `index_current`/`index_provider_mapping` 两表；
 ClickHouse 迁移创建 `index_factor` 表（按月分区）；`prefect deployment ls`
-可见 `index-factor-sync/daily-17` 与 `index-factor-backfill/backfill`。
+可见 `index-factor-sync/指数技术因子同步` 与 `index-factor-backfill/指数技术因子历史回补`。
 
 ## 3. 核心验证：增量同步
 
 ```bash
-uv run prefect deployment run "index-factor-sync/daily-17" --param scheduled_at=<最近一个交易日17:00的UTC ISO8601>
+uv run prefect deployment run "index-factor-sync/指数技术因子同步" --param scheduled_at=<最近一个交易日17:00的UTC ISO8601>
 ```
 
 预期（`logs/index_factor/index_factor.jsonl` 与 MySQL 审计表）：
@@ -54,7 +54,7 @@ uv run prefect deployment run "index-factor-sync/daily-17" --param scheduled_at=
 ## 4. 初始化回补与幂等
 
 ```bash
-uv run prefect deployment run "index-factor-backfill/backfill" \
+uv run prefect deployment run "index-factor-backfill/指数技术因子历史回补" \
   --param start_date=20240101 --param end_date=<最近交易日> --param backfill_batch_id=init-2026-08-02
 ```
 

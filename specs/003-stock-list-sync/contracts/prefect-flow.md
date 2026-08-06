@@ -4,7 +4,7 @@
 
 **Flow**：`stock-list-sync`
 
-**Deployment**：`stock-list-sync/default`
+**Deployment**：`stock-list-sync/股票列表同步`
 
 **入口**：
 

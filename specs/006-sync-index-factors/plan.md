@@ -44,7 +44,7 @@ Redis、Prefect Server（沿用 compose.yml，端口仅绑定 127.0.0.1）
 待验证项 6）；单日请求返回行数预期远小于 8,000 上限（research 待验证项 1）
 
 **约束**：
-- 计划 Cron 固定 `0 17 * * 1-5`，时区 Asia/Shanghai；目标交易日以
+- 计划 Cron 固定 `0 19 * * 1-5`，时区 Asia/Shanghai；目标交易日以
   `prefect.runtime.flow_run.scheduled_start_time` 为准，直接调用必须显式
   提供 `scheduled_at`。
 - 每个 Flow 启动后必须查询项目交易日历（CN-S）；非交易日直接记录
@@ -184,7 +184,7 @@ src/lucking/
 migrations/versions/
 └── 005_create_index_identity_tables.py   # + index_current / index_provider_mapping DDL
 
-prefect.yaml                          # + index-factor-sync/daily-17 与 index-factor-backfill/backfill Deployment
+prefect.yaml                          # + index-factor-sync/指数技术因子同步 与 index-factor-backfill/指数技术因子历史回补 Deployment
 
 tests/
 ├── unit/…（index_factor 校验/节流/身份解析）

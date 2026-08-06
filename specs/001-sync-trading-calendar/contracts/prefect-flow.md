@@ -132,7 +132,7 @@
 
 ```bash
 uv run prefect deployment run \
-  'trading-calendar-sync/default' \
+  'trading-calendar-sync/交易日历同步' \
   --param mode=manual \
   --param market_code=CN-S \
   --param start_date=2026-01-01 \

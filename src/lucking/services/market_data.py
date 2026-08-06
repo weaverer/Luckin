@@ -7,7 +7,7 @@ import json
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -143,9 +143,16 @@ class MarketDataService:
             if not slug:
                 raise ValueError("schedule_slug 不能为空")
             scheduled_utc = command.scheduled_for.astimezone(UTC)
-            target = scheduled_utc.astimezone(self._timezone).date()
-            if not self.is_trade_day(target):
-                return self._skipped(command.data_kind, target)
+            day = scheduled_utc.astimezone(self._timezone).date()
+            if not self.is_trade_day(day):
+                return self._skipped(command.data_kind, day)
+            # ADJ_FACTOR 09:30 开盘后获取：当日复权因子收盘后才发布，
+            # 目标日 = 前一个交易日（spec 005 决策）。
+            target = (
+                self._previous_trade_day(day)
+                if command.data_kind is DataKind.ADJ_FACTOR
+                else day
+            )
             run_key = scheduled_run_key(command.data_kind, slug, scheduled_utc, target)
             claim = self._repository.claim_run_and_start_attempt(
                 run_key=run_key,
@@ -333,6 +340,22 @@ class MarketDataService:
             market_code, target_date
         )
         return calendar is not None and calendar.is_open
+
+    def _previous_trade_day(self, day: date, *, market_code: str = "CN-S") -> date:
+        """返回指定日之前最近的交易日（ADJ_FACTOR 09:30 同步的目标日）。
+
+        日历缺口（如迁移初期仅有部分年份）时抛校验错误，由调用方按失败终态记录。
+        """
+        calendar = SqlAlchemyTradingCalendarRepository(self._session_factory)
+        entries = calendar.list_range(
+            market_code, day - timedelta(days=14), day - timedelta(days=1)
+        )
+        open_days = [entry.calendar_date for entry in entries if entry.is_open]
+        if not open_days:
+            raise MarketDataValidationError(
+                "CALENDAR_GAP", f"未找到 {day.isoformat()} 的前一个交易日"
+            )
+        return max(open_days)
 
     def _fetch(
         self,

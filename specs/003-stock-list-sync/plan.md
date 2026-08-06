@@ -211,7 +211,7 @@ Repository 在 MySQL 事务中发布当前值。现有交易日历领域类、�
 
 ### 阶段 3：工作流、调度与可观测性
 
-1. 新增 `stock-list-sync/default` Deployment 与每日 09:00 Schedule。
+1. 新增 `stock-list-sync/股票列表同步` Deployment 与每日 09:00 Schedule。
 2. 实现计划与人工补跑参数、唯一 `run_key`、Adapter 有界重试和 25 分钟获取截止时间。
 3. 泛化 JSONL 日志文件名、字段白名单和及时性阈值，保持交易日历行为兼容。
 4. 更新 README 的配置、部署、补跑、排障和安全停止说明。

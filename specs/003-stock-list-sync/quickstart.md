@@ -115,15 +115,15 @@ uv run prefect worker start --pool local-pool --type process
 另一终端注册 Deployment：
 
 ```bash
-uv run prefect deploy --name sync-stock-list/default --no-prompt
-uv run prefect deployment schedule ls stock-list-sync/default
+uv run prefect deploy --name sync-stock-list/股票列表同步 --no-prompt
+uv run prefect deployment schedule ls stock-list-sync/股票列表同步
 ```
 
 预期：
 
-- `sync-stock-list/default` 只用于 Prefect 3.8 按入口函数
+- `sync-stock-list/股票列表同步` 只用于 Prefect 3.8 按入口函数
   `sync_stock_list` 选择 YAML 配置；创建出的 Deployment 名为
-  `stock-list-sync/default`。
+  `stock-list-sync/股票列表同步`。
 - Schedule slug 为 `daily-stock-list`。
 - Cron 为 `0 9 * * *`。
 - 时区为 `Asia/Shanghai`。
@@ -135,7 +135,7 @@ uv run prefect deployment schedule ls stock-list-sync/default
 使用明确计划时点，便于后续验证相同 run_key：
 
 ```bash
-uv run prefect deployment run 'stock-list-sync/default' \
+uv run prefect deployment run 'stock-list-sync/股票列表同步' \
   --param scope_code=CN-S \
   --param schedule_slug=manual-stock-list \
   --param scheduled_at=2026-07-27T09:00:00+08:00
@@ -233,7 +233,7 @@ uv run pytest tests/integration/test_stock_list_performance.py -k current_query
 使用测试 fixture 先制造失败，再显式补跑原计划周期：
 
 ```bash
-uv run prefect deployment run 'stock-list-sync/default' \
+uv run prefect deployment run 'stock-list-sync/股票列表同步' \
   --param scope_code=CN-S \
   --param schedule_slug=manual-stock-list \
   --param scheduled_at=2026-07-28T09:00:00+08:00 \
@@ -361,8 +361,8 @@ uv run pytest tests/unit/test_stock_list_service.py
 暂停计划：
 
 ```bash
-uv run prefect deployment schedule ls stock-list-sync/default
-uv run prefect deployment schedule pause stock-list-sync/default <schedule-id>
+uv run prefect deployment schedule ls stock-list-sync/股票列表同步
+uv run prefect deployment schedule pause stock-list-sync/股票列表同步 <schedule-id>
 ```
 
 停止 Worker 可阻止新运行。不要直接删除同步结果、当前股票或 Provider 映射。
@@ -371,5 +371,5 @@ uv run prefect deployment schedule pause stock-list-sync/default <schedule-id>
 恢复计划：
 
 ```bash
-uv run prefect deployment schedule resume stock-list-sync/default <schedule-id>
+uv run prefect deployment schedule resume stock-list-sync/股票列表同步 <schedule-id>
 ```

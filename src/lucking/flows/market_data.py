@@ -259,7 +259,7 @@ def _load_trade_days(settings: Settings, start_date: date, end_date: date) -> se
 
 
 def _window_target_ms(settings: Settings, data_kind: DataKind) -> int:
-    """窗口及时性目标：复权因子（09:00 启动）必须在开盘前 09:20 形成终态；
+    """窗口及时性目标：复权因子（09:30 启动，单请求快速收敛）按 20 分钟衡量；
     日线（17:00）等其余数据类要求当日形成终态（按 8 小时窗口衡量）。"""
     if data_kind is DataKind.ADJ_FACTOR:
         return 20 * 60 * 1000

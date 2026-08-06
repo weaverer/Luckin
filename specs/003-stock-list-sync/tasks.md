@@ -80,7 +80,7 @@ Tushare SDK、字段、端点或错误码。
 - [X] T021 [P] [US1] 实现首次同步所需的批量当前值/Provider 映射 upsert、成功计数提交和只返回允许字段的筛选查询 `src/lucking/repositories/stock_list.py`
 - [X] T022 [US1] 实现固定 `CN-S`、供应商无关的同步命令、run_key、首次完整候选校验、身份创建、原子发布和仅供内部已授权调用方使用的当前列表查询 `src/lucking/services/stock_list.py`
 - [X] T023 [US1] 实现计划/人工参数解析、Service 编排、成功终态和结构化计时日志的 Prefect Flow `src/lucking/flows/stock_list.py`
-- [X] T024 [P] [US1] 配置 `stock-list-sync/default`、`daily-stock-list`、`0 9 * * *`、`Asia/Shanghai`、仅含固定 `scope_code=CN-S` 且无 venue 子集的入口参数和并发限制 `prefect.yaml`
+- [X] T024 [P] [US1] 配置 `stock-list-sync/股票列表同步`、`daily-stock-list`、`0 9 * * *`、`Asia/Shanghai`、仅含固定 `scope_code=CN-S` 且无 venue 子集的入口参数和并发限制 `prefect.yaml`
 
 **检查点**：US1 可在干净数据库中独立运行并验证，是可交付 MVP。
 

@@ -62,6 +62,31 @@ class Settings(BaseSettings):
     index_factor_run_lease_seconds: int = 2100
     index_factor_page_limit: int = 8000
     index_factor_rate_limit_per_minute: int = 30
+    stock_factor_provider: str = "tushare"
+    stock_factor_timezone: str = "Asia/Shanghai"
+    stock_factor_log_dir: Path = Path("logs")
+    stock_factor_log_filename: str = "stock-factor-sync.jsonl"
+    stock_factor_fetch_deadline_seconds: int = 1500
+    stock_factor_run_lease_seconds: int = 2100
+    stock_factor_page_limit: int = 10000
+    stock_factor_rate_limit_per_minute: int = 30
+    shareholder_data_provider: str = "tushare"
+    shareholder_data_timezone: str = "Asia/Shanghai"
+    shareholder_data_log_dir: Path = Path("logs")
+    shareholder_data_log_filename: str = "shareholder-data-sync.jsonl"
+    shareholder_data_fetch_deadline_seconds: int = 1500
+    shareholder_data_run_lease_seconds: int = 2100
+    shareholder_data_page_limit: int = 6000
+    shareholder_data_rate_limit_per_minute: int = 400
+    # 计划增量窗口最多回看天数：表空/水位陈旧时限制单次提取规模，
+    # 避免 600+ 天积压超过提取截止时间（实测 PROVIDER_DEADLINE）。
+    shareholder_data_window_lookback_days: int = 30
+    # 账户级限流语义（research 决策 4 修订）：400/min 是三个接口共享的
+    # 账户预算（合计），跨进程（3 Flow 并发/回补与增量同跑）必须共享
+    # 同一预算 —— 由 Redis 分布式节流器保证；可选 process 降级为进程级。
+    shareholder_data_rate_limiter: str = "redis"
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    redis_password: SecretStr | None = None
     clickhouse_host: str = "127.0.0.1"
     clickhouse_port: int = 8123
     clickhouse_database: str = "lucking"
@@ -77,6 +102,8 @@ class Settings(BaseSettings):
         "daily_basic_provider",
         "kline_provider",
         "index_factor_provider",
+        "stock_factor_provider",
+        "shareholder_data_provider",
     )
     @classmethod
     def normalize_provider(cls, value: str) -> str:
@@ -98,6 +125,8 @@ class Settings(BaseSettings):
         "broker_recommendation_timezone",
         "market_data_timezone",
         "index_factor_timezone",
+        "stock_factor_timezone",
+        "shareholder_data_timezone",
     )
     @classmethod
     def validate_timezone(cls, value: str) -> str:
@@ -164,6 +193,46 @@ class Settings(BaseSettings):
             raise ValueError("指数因子数值配置必须大于 0")
         return value
 
+    @field_validator(
+        "stock_factor_fetch_deadline_seconds",
+        "stock_factor_run_lease_seconds",
+        "stock_factor_page_limit",
+        "stock_factor_rate_limit_per_minute",
+    )
+    @classmethod
+    def validate_positive_stock_factor_setting(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("股票技术面因子数值配置必须大于 0")
+        return value
+
+    @field_validator(
+        "shareholder_data_fetch_deadline_seconds",
+        "shareholder_data_run_lease_seconds",
+        "shareholder_data_page_limit",
+        "shareholder_data_rate_limit_per_minute",
+        "shareholder_data_window_lookback_days",
+    )
+    @classmethod
+    def validate_positive_shareholder_data_setting(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("股东数据数值配置必须大于 0")
+        return value
+
+    @field_validator("shareholder_data_rate_limiter")
+    @classmethod
+    def validate_shareholder_rate_limiter(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in ("redis", "process"):
+            raise ValueError("SHAREHOLDER_DATA_RATE_LIMITER 只允许 redis 或 process")
+        return normalized
+
+    @field_validator("redis_url")
+    @classmethod
+    def validate_redis_url(cls, value: str) -> str:
+        if not value.startswith("redis://"):
+            raise ValueError("REDIS_URL 必须是 redis:// URL")
+        return value
+
     @field_validator("clickhouse_port")
     @classmethod
     def validate_clickhouse_port(cls, value: int) -> int:
@@ -205,6 +274,30 @@ class Settings(BaseSettings):
         if self.index_factor_rate_limit_per_minute != 30:
             raise ValueError("INDEX_FACTOR_RATE_LIMIT_PER_MINUTE 固定为 30")
         if self.index_factor_run_lease_seconds <= self.index_factor_fetch_deadline_seconds:
+            raise ValueError("运行租约必须大于 Provider 截止时间")
+        return self
+
+    @model_validator(mode="after")
+    def validate_stock_factor_invariants(self) -> "Settings":
+        if self.stock_factor_page_limit != 10000:
+            raise ValueError("STOCK_FACTOR_PAGE_LIMIT 固定为 10000")
+        if self.stock_factor_run_lease_seconds != 2100:
+            raise ValueError("STOCK_FACTOR_RUN_LEASE_SECONDS 固定为 2100")
+        if self.stock_factor_rate_limit_per_minute != 30:
+            raise ValueError("STOCK_FACTOR_RATE_LIMIT_PER_MINUTE 固定为 30")
+        if self.stock_factor_run_lease_seconds <= self.stock_factor_fetch_deadline_seconds:
+            raise ValueError("运行租约必须大于 Provider 截止时间")
+        return self
+
+    @model_validator(mode="after")
+    def validate_shareholder_data_invariants(self) -> "Settings":
+        if self.shareholder_data_page_limit != 6000:
+            raise ValueError("SHAREHOLDER_DATA_PAGE_LIMIT 固定为 6000（实测单次上限）")
+        if self.shareholder_data_run_lease_seconds != 2100:
+            raise ValueError("SHAREHOLDER_DATA_RUN_LEASE_SECONDS 固定为 2100")
+        if self.shareholder_data_rate_limit_per_minute != 400:
+            raise ValueError("SHAREHOLDER_DATA_RATE_LIMIT_PER_MINUTE 固定为 400（用户显式指定）")
+        if self.shareholder_data_run_lease_seconds <= self.shareholder_data_fetch_deadline_seconds:
             raise ValueError("运行租约必须大于 Provider 截止时间")
         return self
 

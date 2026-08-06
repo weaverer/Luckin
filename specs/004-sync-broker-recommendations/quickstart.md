@@ -189,12 +189,12 @@ uv run prefect worker start --pool local-pool --type process
 
 ```bash
 uv run prefect deploy --name sync-broker-recommendations/default --no-prompt
-uv run prefect deployment schedule ls broker-recommendation-sync/default
+uv run prefect deployment schedule ls broker-recommendation-sync/券商金股同步
 ```
 
 预期：
 
-- 创建的 Deployment 为 `broker-recommendation-sync/default`。
+- 创建的 Deployment 为 `broker-recommendation-sync/券商金股同步`。
 - Schedule slug 为 `monthly-broker-recommendations`。
 - Cron 为 `0 12 3,4 * *`。
 - 时区为 `Asia/Shanghai`。
@@ -206,7 +206,7 @@ uv run prefect deployment schedule ls broker-recommendation-sync/default
 使用明确原计划时点：
 
 ```bash
-uv run prefect deployment run 'broker-recommendation-sync/default' \
+uv run prefect deployment run 'broker-recommendation-sync/券商金股同步' \
   --param schedule_slug=monthly-broker-recommendations \
   --param scheduled_at=2026-08-03T12:00:00+08:00
 ```
@@ -257,7 +257,7 @@ docker compose exec mysql mysql \
 先运行 3 日，再运行 4 日：
 
 ```bash
-uv run prefect deployment run 'broker-recommendation-sync/default' \
+uv run prefect deployment run 'broker-recommendation-sync/券商金股同步' \
   --param schedule_slug=monthly-broker-recommendations \
   --param scheduled_at=2026-08-04T12:00:00+08:00
 ```
@@ -339,7 +339,7 @@ uv run pytest -m mysql tests/integration/test_broker_recommendation_mysql.py -k 
 执行项目初始化的 24 月历史补跑：
 
 ```bash
-uv run prefect deployment run 'broker-recommendation-backfill/manual' \
+uv run prefect deployment run 'broker-recommendation-backfill/券商金股历史回补' \
   --param start_month=2024-01-01 \
   --param end_month=2025-12-01 \
   --param backfill_batch_id=initial-load-2026-07
@@ -357,7 +357,7 @@ uv run prefect deployment run 'broker-recommendation-backfill/manual' \
 使用 fixture 制造失败后，记录失败 `run_id` 并显式重试：
 
 ```bash
-uv run prefect deployment run 'broker-recommendation-retry/manual' \
+uv run prefect deployment run 'broker-recommendation-retry/券商金股同步重试' \
   --param run_id=replace-with-failed-run-id
 ```
 
@@ -376,13 +376,13 @@ uv run prefect deployment run 'broker-recommendation-retry/manual' \
 
 ```bash
 # 恰好 120 个月：2016-01 至 2025-12
-uv run prefect deployment run 'broker-recommendation-backfill/manual' \
+uv run prefect deployment run 'broker-recommendation-backfill/券商金股历史回补' \
   --param start_month=2016-01-01 \
   --param end_month=2025-12-01 \
   --param backfill_batch_id=boundary-120-months
 
 # 121 个月：2015-12 至 2025-12
-uv run prefect deployment run 'broker-recommendation-backfill/manual' \
+uv run prefect deployment run 'broker-recommendation-backfill/券商金股历史回补' \
   --param start_month=2015-12-01 \
   --param end_month=2025-12-01 \
   --param backfill_batch_id=boundary-121-months
@@ -477,7 +477,7 @@ uv run pytest tests/contract/test_broker_recommendation_provider.py -k golden
 tail -n 100 logs/broker-recommendation-sync.jsonl
 rg '"event":"broker_recommendation_sync_(succeeded|failed)"' \
   logs/broker-recommendation-sync.jsonl* | tail -n 30
-uv run prefect deployment schedule ls broker-recommendation-sync/default
+uv run prefect deployment schedule ls broker-recommendation-sync/券商金股同步
 ```
 
 运维人员应在 5 分钟内回答：

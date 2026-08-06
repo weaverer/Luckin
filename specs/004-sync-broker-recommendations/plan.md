@@ -275,7 +275,7 @@ Repository 负责股票身份读取、并发认领和 MySQL 原子发布；计�
 
 ### 阶段 4：工作流、调度与运维
 
-1. 新增 `broker-recommendation-sync/default`，Cron `0 12 3,4 * *`，
+1. 新增 `broker-recommendation-sync/券商金股同步`，Cron `0 12 3,4 * *`，
    时区 `Asia/Shanghai`，并发 1，冲突策略 `ENQUEUE`。
 2. 计划 Flow 从 Prefect runtime 读取计划时点；历史补跑 Flow 校验月份闭区间和
    `backfill_batch_id`，逐月解析运行状态：成功跳过、失败/过期运行转换为引用原 `run_id`

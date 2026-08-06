@@ -244,8 +244,8 @@ class TushareIndexFactorProvider:
                 pre_close=_optional_decimal(row["pre_close"], "pre_close"),
                 change=_optional_decimal(row["change"], "change"),
                 pct_chg=_optional_decimal(row["pct_change"], "pct_change"),
-                vol=_optional_decimal(row["vol"], "vol"),
-                amount=_optional_decimal(row["amount"], "amount"),
+                vol=_optional_decimal(row["vol"], "vol", capped=False),
+                amount=_optional_decimal(row["amount"], "amount", capped=False),
                 **values,
             )
         except (KeyError, TypeError, ValueError) as exc:
@@ -284,13 +284,28 @@ def _decimal(value: Any, field: str) -> Decimal:
     raise ValueError(f"{field} 为空或类型非法")
 
 
-def _optional_decimal(value: Any, field: str) -> Decimal | None:
-    """因子数字允许为空（来源未返回时以 None 保存，区别于无效记录）。"""
+# 目标列精度：基础行情与因子列 Decimal(12,4)（整数位 8）；vol/amount 为
+# Decimal(24,2)，不受此上限约束（来源 vol/amount 可达数十亿）。
+_DECIMAL_12_4_CAP = Decimal("99999999.9999")
+
+
+def _optional_decimal(
+    value: Any, field: str, *, capped: bool = True
+) -> Decimal | None:
+    """因子数字允许为空（来源未返回时以 None 保存，区别于无效记录）。
+
+    ``capped`` 列（Decimal(12,4)）：来源无数据哨兵值（实测 2026-08-03/04
+    ``vr=999999999.99999``）超出列精度，按缺失保存而非整批失败
+    （实测 PERSISTENCE_ERROR: Decimal value is too big）。
+    """
     if value is None:
         return None
     if isinstance(value, str) and not value.strip():
         return None
-    return _decimal(value, field)
+    parsed = _decimal(value, field)
+    if capped and abs(parsed) > _DECIMAL_12_4_CAP:
+        return None
+    return parsed
 
 
 def _optional_int(value: Any, field: str) -> int | None:

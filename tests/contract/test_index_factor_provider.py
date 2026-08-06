@@ -114,6 +114,35 @@ def test_request_params_only_trade_date() -> None:
     assert record.kdj is None  # 来源未返回的因子以 None 保存
 
 
+def test_overflow_sentinel_saved_as_missing() -> None:
+    """来源无数据哨兵（实测 vr=999999999.99999，超出 Decimal(12,4)）→ 按缺失保存。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=_envelope([_row(extra={"vr": 999999999.99999})])
+        )
+
+    provider = _provider(handler)
+    batch = provider.fetch_index_factors(_REQUEST, deadline=1_000_000_000_000.0)
+    assert batch.records[0].vr is None
+
+
+def test_vol_amount_above_12_4_cap_not_capped() -> None:
+    """vol/amount 目标列为 Decimal(24,2)，数十亿级实测值不受 12,4 上限约束。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=_envelope(
+                [_row(extra={"vol": 2213444404.0, "amount": 4068245188.87})]
+            ),
+        )
+
+    provider = _provider(handler)
+    batch = provider.fetch_index_factors(_REQUEST, deadline=1_000_000_000_000.0)
+    record = batch.records[0]
+    assert record.vol == Decimal("2213444404.0")
+    assert record.amount == Decimal("4068245188.87")
+
+
 def test_missing_pre_close_is_saved_not_isolated() -> None:
     """昨收缺失（439/3146 行实测形态）属有效行情，正常保存。"""
     def handler(request: httpx.Request) -> httpx.Response:

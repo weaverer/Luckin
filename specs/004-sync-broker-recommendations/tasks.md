@@ -76,7 +76,7 @@ Memory Provider 必须证明更换来源不修改 Service、Repository 或业务
 - [X] T022 [US1] 实现数据库原子创建基础 run/attempt、读取股票 Provider 映射与规范键、成功插入推荐及内部查询 `src/lucking/repositories/broker_recommendation.py`
 - [X] T023 [US1] 实现 `ScheduledBrokerRecommendationSyncCommand`、规范结果、原计划时间推导目标月、Provider 调用、基础验证、身份解析和成功发布 `src/lucking/services/broker_recommendation.py`
 - [X] T024 [US1] 实现从 Prefect runtime 读取 `scheduled_start_time`、组装 Service 并返回规范结果的 `retries=0` Flow `src/lucking/flows/broker_recommendation.py`
-- [X] T025 [US1] 注册 `broker-recommendation-sync/default`、Cron、时区、slug、并发 1 和 `ENQUEUE` 调度 `prefect.yaml`
+- [X] T025 [US1] 注册 `broker-recommendation-sync/券商金股同步`、Cron、时区、slug、并发 1 和 `ENQUEUE` 调度 `prefect.yaml`
 - [X] T026 [US1] 实现 `list_month` 的月份、券商、`stock_id`、venue、代码筛选和稳定分页排序，并确保返回不含 Provider 字段和 BIGINT 物理主键 `src/lucking/services/broker_recommendation.py`、`src/lucking/repositories/broker_recommendation.py`
 
 **检查点**：用户故事 1 可独立部署和验证；系统能够按计划保存当月金股并供内部查询。
@@ -112,7 +112,7 @@ Memory Provider 必须证明更换来源不修改 Service、Repository 或业务
 - [X] T036 [US2] 实现两类稳定 run key、运行类型字段互斥、MySQL 首次并发原子 insert-or-read、唯一冲突重读加锁、相同 `flow_run_id` 重入和成功运行短路 `src/lucking/services/broker_recommendation.py`、`src/lucking/repositories/broker_recommendation.py`
 - [X] T037 [US2] 实现 `BackfillBrokerRecommendationMonthCommand`、`RetryBrokerRecommendationSyncCommand` 和 `resolve_backfill_month` 状态矩阵；认领时用数据库 UTC 写入固定 35 分钟租约，不续租，查询返回数据库计算的过期标志，Retry 时锁定原 run/attempt 并原子复核过期后执行 `ABANDONED`、issue 和新 attempt `src/lucking/services/broker_recommendation.py`、`src/lucking/repositories/broker_recommendation.py`
 - [X] T038 [US2] 实现首尾均计入且先整体校验的历史月份展开函数，严格接受 1–120 月并原子拒绝 121 月、未来月、反向或空范围 `src/lucking/flows/broker_recommendation.py`
-- [X] T039 [US2] 实现逐月隔离执行和汇总的补跑 Flow，按解析结果分派 Backfill/Skip/Retry/In-progress，并注册无 Cron 的 `broker-recommendation-backfill/manual` `src/lucking/flows/broker_recommendation.py`、`prefect.yaml`
+- [X] T039 [US2] 实现逐月隔离执行和汇总的补跑 Flow，按解析结果分派 Backfill/Skip/Retry/In-progress，并注册无 Cron 的 `broker-recommendation-backfill/券商金股历史回补` `src/lucking/flows/broker_recommendation.py`、`prefect.yaml`
 - [X] T040 [US2] 加固真实 MySQL 推荐发布的锁定与 upsert，使计划和补跑不同 run 同月并发时保留两个审计结果，并以 `recommendation_month + broker_name + stock_id` 唯一约束只保留一条推荐；校验股票代码稳定，股票简称等其他属性允许按事务提交顺序落值且不实现跨 run 版本比较 `src/lucking/repositories/broker_recommendation.py`
 
 **检查点**：用户故事 2 可独立验证；稳定身份、固定租约失败月恢复、120/121 边界及跨类型并发唯一性全部通过。
@@ -142,7 +142,7 @@ run/attempt/issue、日志安全、推荐表摘要不变，并能在数据库 UT
 - [X] T047 [US3] 增加确定性权限码、安全业务错误摘要和 `Retry-After` 可选读取，同时保持现有交易日历与股票列表兼容 `src/lucking/integrations/tushare/client.py`
 - [X] T048 [US3] 实现无效/冲突分类、所有失败计数、每个未保存输入的可判断原因以及失败批次零发布 `src/lucking/services/broker_recommendation.py`
 - [X] T049 [US3] 实现失败 attempt/run、脱敏 issue、发布回滚后独立失败事务、终态不可重开，以及仅在数据库 UTC 固定租约过期或运行已失败时按原 `run_id` 显式重试 `src/lucking/repositories/broker_recommendation.py`
-- [X] T050 [US3] 实现包含运行类型与分页证据的结构化日志、计划 timeliness、按原 `run_id` 的失败重试 Flow、安全失败返回和终态关联，并注册无 Cron 的 `broker-recommendation-retry/manual` `src/lucking/flows/broker_recommendation.py`、`prefect.yaml`
+- [X] T050 [US3] 实现包含运行类型与分页证据的结构化日志、计划 timeliness、按原 `run_id` 的失败重试 Flow、安全失败返回和终态关联，并注册无 Cron 的 `broker-recommendation-retry/券商金股同步重试` `src/lucking/flows/broker_recommendation.py`、`prefect.yaml`
 - [X] T051 [US3] 扩展 JSONL 字段白名单与本域独立日志文件，确保错误和异常序列化不泄露秘密、原始数据或 BIGINT 物理主键 `src/lucking/logging.py`
 
 **检查点**：三个用户故事全部可独立验证；失败安全、重试、审计和五分钟排障能力完整。

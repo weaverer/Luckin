@@ -23,11 +23,11 @@ def market_data_sync(
 
 | Deployment | data_kind | Cron | 时区 |
 |------------|-----------|------|------|
-| `adj-factor-sync` | ADJ_FACTOR | `0 9 * * 1-5` | Asia/Shanghai |
-| `daily-quote-sync` | DAILY_QUOTE | `0 17 * * 1-5` | Asia/Shanghai |
-| `daily-basic-sync` | DAILY_BASIC | `45 17 * * 1-5` | Asia/Shanghai |
-| `weekly-kline-sync` | WEEKLY_KLINE | `30 18 * * 1-5` | Asia/Shanghai |
-| `monthly-kline-sync` | MONTHLY_KLINE | `30 18 * * 1-5` | Asia/Shanghai |
+| `复权因子同步` | ADJ_FACTOR | `30 9 * * 1-5` | Asia/Shanghai |
+| `日线行情同步` | DAILY_QUOTE | `0 17 * * 1-5` | Asia/Shanghai |
+| `每日基本面同步` | DAILY_BASIC | `45 17 * * 1-5` | Asia/Shanghai |
+| `周K线同步` | WEEKLY_KLINE | `30 18 * * 1-5` | Asia/Shanghai |
+| `月K线同步` | MONTHLY_KLINE | `30 18 * * 1-5` | Asia/Shanghai |
 
 周线与月线为两个 Deployment、两个 `data_kind`，各自独立运行、独立恢复，
 写入各自独立的 ClickHouse 业务表；同一 Cron 时点不互相阻塞。

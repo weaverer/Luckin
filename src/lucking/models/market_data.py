@@ -33,6 +33,10 @@ class DataKind(StrEnum):
     WEEKLY_KLINE = "WEEKLY_KLINE"
     MONTHLY_KLINE = "MONTHLY_KLINE"
     INDEX_FACTOR = "INDEX_FACTOR"
+    STOCK_FACTOR = "STOCK_FACTOR"
+    TOP10_HOLDERS = "TOP10_HOLDERS"
+    TOP10_FLOAT_HOLDERS = "TOP10_FLOAT_HOLDERS"
+    HOLDER_COUNT = "HOLDER_COUNT"
 
 
 class VenueCode(StrEnum):
@@ -271,9 +275,10 @@ class MarketDataSyncRun(Base):
         String(64), nullable=False, comment="规范运行身份的SHA-256摘要"
     )
     data_kind: Mapped[str] = mapped_column(
-        String(16),
+        String(32),
         nullable=False,
-        comment="数据类：DAILY_QUOTE、ADJ_FACTOR、DAILY_BASIC、WEEKLY_KLINE或MONTHLY_KLINE",
+        comment="数据类：DAILY_QUOTE、ADJ_FACTOR、DAILY_BASIC、WEEKLY_KLINE、MONTHLY_KLINE、"
+        "INDEX_FACTOR、STOCK_FACTOR、TOP10_HOLDERS、TOP10_FLOAT_HOLDERS或HOLDER_COUNT",
     )
     run_kind: Mapped[str] = mapped_column(
         String(12), nullable=False, comment="运行类型：计划运行或历史回补"
