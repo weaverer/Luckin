@@ -101,3 +101,17 @@ T002/T003；T006/T007/T008/T011；US1 的 T012—T015；US2 的 T021—T024；US
 ## 格式校验
 
 共 49 项任务；所有任务均使用 `- [ ] Txxx` 格式，用户故事任务均带 `[USn]`，并行任务均带 `[P]`，每项均含明确文件路径。
+
+## Phase 8: Convergence
+
+- [ ] T050 CRITICAL：在 `src/lucking/services/j_gold_research.py`、`src/lucking/api/main.py` 和 `tests/integration/test_j_gold_api.py` 为行情、基准及模块失败增加携带 request_id、筛选范围、耗时、失败类别和影响范围的脱敏结构化日志，禁止以静默空集合掩盖查询故障 per Constitution V / NFR-004 (contradicts)
+- [ ] T051 CRITICAL：以 FastAPI 生成的 OpenAPI 为唯一契约来源，在 `src/lucking/models/j_gold.py`、`src/lucking/api/routes/j_gold.py`、`frontend/src/composables/useJGoldResearch.ts`、`frontend/src/components/j-gold/` 和 `specs/011-j-gold-research-cockpit/contracts/openapi.yaml` 建立具体研究 DTO/前端类型并移除 `Record<string, unknown>` 与跨层无约束字典 per Constitution II、VII / plan: typed DTO (contradicts)
+- [ ] T052 CRITICAL：在 `tests/unit/`、`tests/contract/`、`tests/integration/`、`frontend/tests/component/` 和 `frontend/tests/e2e/` 补齐异动七类规则、模块失败与独立重试、空/延迟/不足状态、筛选联动、三档响应式、键盘和非颜色状态的自动化回归，并执行完整后端与前端质量门禁 per Constitution III / FR-010、FR-016、NFR-003 (missing)
+- [ ] T053 在 `src/lucking/ports/j_gold_data.py`、`src/lucking/repositories/workbench_queries/j_gold.py`、`src/lucking/services/j_gold_research.py` 及对应契约/集成测试中接入可替换的规范行业分类能力，保证行业筛选、行业共识、行业升温及分类变更可追溯 per FR-011、FR-015 / US3-AC3 (partial)
+- [ ] T054 在 `src/lucking/models/j_gold.py`、`src/lucking/services/j_gold_research.py`、`src/lucking/api/routes/j_gold.py`、`frontend/src/composables/useJGoldResearch.ts` 和各 J金股模块中实现模块级质量封装、异常隔离、局部加载和独立重试，保留其他可验证内容 per FR-016 / research decision 2 (partial)
+- [ ] T055 在 `frontend/src/components/j-gold/OverviewMetrics.vue`、`OpportunityRadar.vue`、`StockResearchDrawer.vue` 及后端研究 DTO 中补全可操作的指标定义、统计时间/范围/来源/质量、评分原始值与默认权重、缺失项重归一化说明及研究状态触发依据 per FR-003、FR-008、FR-009、FR-014 / SC-004 (partial)
+- [ ] T056 在 `src/lucking/services/j_gold_research.py`、`src/lucking/api/routes/j_gold.py`、`frontend/src/components/j-gold/GoldSignals.vue` 和相应测试中为异动增加事实引用、来源、生成时间、质量说明和可追溯下钻，并让行情类异动使用实际最新行情日期 per FR-010、FR-014 / SC-004 (partial)
+- [ ] T057 在 `src/lucking/services/j_gold_research.py`、`src/lucking/api/routes/j_gold.py`、`frontend/src/components/j-gold/BrokerAbility.vue` 及对应测试中展示券商能力实际起止月份、完整结果或分页、等级阈值与计算依据，并在规则无法由已批准规格确认时保持未评级 per FR-012 (partial)
+- [ ] T058 在 `frontend/src/composables/useJGoldResearch.ts`、`frontend/src/views/BrokerRecommendationsView.vue`、`frontend/src/components/j-gold/IndustryConsensus.vue` 和 E2E 测试中保留并可恢复行业下钻前后的月份、券商、行业、排序、分页及雷达分类上下文 per US3-AC3 / SC-002 (partial)
+- [ ] T059 在 `frontend/src/components/j-gold/MarketDiffusion.vue` 及对应 DTO/测试中为最近 8 个月逐月展示质量状态、完整统计口径、生成时间和缺失影响说明，同时保留图表文本替代 per FR-013、FR-014 (partial)
+- [ ] T060 在 `frontend/src/utils/`、`frontend/src/views/BrokerRecommendationsView.vue`、`frontend/src/components/j-gold/StockResearchDrawer.vue` 和相关测试中统一按 `Asia/Shanghai` 格式化展示时间，保留服务端 UTC ISO 8601 原值 per plan: timezone / Constitution technical constraint (partial)
