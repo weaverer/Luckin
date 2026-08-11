@@ -18,11 +18,14 @@ contract/integration tests for interface changes and focused end-to-end tests fo
 1~3 ✅，`scripts/probe_shareholder_api{1,2,3,4}.py`），本功能无字段校准阻塞门禁。
 业务层任务不得直接引用第三方 SDK、传输模型或供应商专有字段。
 
-**MySQL 表结构**：本功能**不新建、不结构性修改任何 MySQL 业务表**——股票身份读取复用
+**MySQL 表结构**：本功能**不新建 MySQL 业务表**——股票身份读取复用
 003 的 `stock_current`/`stock_provider_mapping`（`provider_mappings` 只读），审计复用
-005 的 `market_data_sync_run/attempt/issue`（仅 `DataKind` 枚举新增取值
-`TOP10_HOLDERS`/`TOP10_FLOAT_HOLDERS`/`HOLDER_COUNT`，无列变更）；
-因此无 Alembic 迁移任务，枚举扩展包含在 T003。
+005 的 `market_data_sync_run/attempt/issue`（`DataKind` 枚举新增取值
+`TOP10_HOLDERS`/`TOP10_FLOAT_HOLDERS`/`HOLDER_COUNT`）。
+**结构性变更一项（2026-08-06 上线实测发现）**：`TOP10_FLOAT_HOLDERS` 18 字符超出
+`market_data_sync_run.data_kind` String(16) 列宽，run 认领 INSERT 报
+`DataError (1406)`——经迁移 006 加宽为 String(32)（宪章 VI 例外登记见
+data-model.md §2.3）；枚举扩展包含在 T003。
 ClickHouse `shareholder_holding`/`shareholder_count` 新表（分析型数据，宪章允许的
 "外部引擎承载业务数据"情形）DDL 与验证包含在 T002/T004。
 
@@ -419,20 +422,20 @@ Task: "三个增量 Flow src/lucking/flows/shareholder_data.py + prefect.yaml（
 
 ## Phase 7: Convergence
 
-- [ ] T029 交易日窗口内实跑 quickstart.md §3~§6 并记录结果：§3 增量同步
+- [x] T029 交易日窗口内实跑 quickstart.md §3~§6 并记录结果：§3 增量同步
   （触发 `前十大股东交易日同步`/`前十大流通股东交易日同步`/
   `股东人数交易日同步`，显式 scheduled_at，验证三接口独立终态与按 kind
   水位不跳日）、§4 回补与幂等（`前十大股东历史回补` 等三个 Deployment，
   串行执行）、§5 非交易日 SKIPPED、§6 失败与恢复（含故障隔离）；
   结果回填 quickstart.md 或任务注释 per T026/quickstart.md（partial）
-- [ ] T030 交易日窗口内执行 research.md 部署前待验证项 4/7/8 实测并回填
+- [x] T030 交易日窗口内执行 research.md 部署前待验证项 4/7/8 实测并回填
   （5 已由 T028 覆盖、6 由 T029 §4 实跑覆盖）：4）400 次/分钟限流实际
   行为与错误码、7）更正公告收敛形态（同一业务身份多个 ann_date 按最新
   值收敛不冲突）、8）错峰调度串行执行无叠加 per T028/research.md（partial）
 
 ## Phase 8: Convergence
 
-- [ ] T031 真实账户冒烟门禁（上线前执行，依赖 T010/T012 已实现链路）：
+- [x] T031 真实账户冒烟门禁（上线前执行，依赖 T010/T012 已实现链路）：
   拉取最近一个有披露的公告日，经 TushareShareholderDataProvider →
   ShareholderDataService → ClickHouse 两表全链路发布（三个接口各一次）；
   断言：白名单与响应字段逐名一致（无"字段集合不精确"）、
@@ -469,32 +472,49 @@ Task: "三个增量 Flow src/lucking/flows/shareholder_data.py + prefect.yaml（
 
 ## Phase 10: Convergence
 
-- [ ] T036 CRITICAL 将两项行为变更回填规格文档：①计划增量窗口最多回看
+- [x] T036 CRITICAL 将两项行为变更回填规格文档：①计划增量窗口最多回看
   30 天（`shareholder_data_window_lookback_days`，2026-08-06 实测空表
   612 天积压超出截止时间）②批内同日重复披露隔离（`DUPLICATE_ANN_DISCLOSURE`，
   保留首见、后见计质量问题不整批失败）——按宪章 I"先更新规格再调整实现"
   补齐 spec.md（边界情况/FR-010/假设）与 plan.md（约束/复杂度跟踪）的
   治理记录 per 宪章 I/FR-002/FR-010（contradicts）
-- [ ] T037 CRITICAL 完成 `market_data_sync_run.data_kind` 结构性变更治理：
+- [x] T037 CRITICAL 完成 `market_data_sync_run.data_kind` 结构性变更治理：
   migration 006（String(16)→32，实测 `TOP10_FLOAT_HOLDERS` 18 字符溢出
   DataError）已应用——按宪章 VI 更正 plan.md 宪章检查"MySQL 表结构"段、
   tasks.md 头部"MySQL 表结构"说明、data-model.md §2.3/§3 与 quickstart
   中"无 Alembic 迁移、无列变更、宪章 VI 不适用"的错误表述，并逐表记录
   例外字段、业务理由、唯一性保障与迁移影响 per 宪章 VI/plan: MySQL 表结构（contradicts）
-- [ ] T038 完成 quickstart.md §3~§6 实跑结果回填：2026-08-06 已实跑
+- [x] T038 完成 quickstart.md §3~§6 实跑结果回填：2026-08-06 已实跑
   §3 三个增量 Deployment（17:00/17:05/17:10 错峰，含窗口回看上限实际
   表现与同日重复披露隔离场景）与 §4 三个回补（repair-* 批次，逐日
   独立终态）、§6 失败与恢复（PROVIDER_DEADLINE/DataError/RECORD_CONFLICT
   分类处置），按 T029 要求记录结果 per T029/quickstart.md §3~§6（partial）
-- [ ] T039 完成 research.md 部署前待验证项 4/7/8 实测回填：4）账户级
+- [x] T039 完成 research.md 部署前待验证项 4/7/8 实测回填：4）账户级
   共享限流实际行为（2026-08-06 top10 空表 612 天积压 + 网络错误于 25
   分钟截止触发 PROVIDER_DEADLINE，Redis 限流器全程未出现限流拒绝）；
   7）更正公告收敛形态（实测同日重复披露温一峰 3709894.0 vs 3709912.0
   → `DUPLICATE_ANN_DISCLOSURE` 隔离，跨日更正收敛由 updated 逻辑覆盖）；
   8）错峰调度时间线（17:00 超时失败、17:05 失败、17:10 成功，三 Flow
   无并发叠加） per T030/research.md（partial）
-- [ ] T040 完成真实账户冒烟门禁结果记录：2026-08-06 已通过三接口全链路
+- [x] T040 完成真实账户冒烟门禁结果记录：2026-08-06 已通过三接口全链路
   真实发布（top10_holders/top10_floatholders/stk_holdernumber →
   ShareholderDataService → ClickHouse，holding 520 行 / count 644 行，
   白名单一致、`has_more` 收尾、hold_amount 无 Decimal 溢出），按 T031
   补记断言结论至 research.md/quickstart §8 per T031/宪章 III（partial）
+
+## Phase 11: Convergence
+
+- [x] T041 同步三处旧语义表述与已实现行为一致：①`plan.md` 摘要段——增量
+  窗口定义补"最多回看 30 天（`shareholder_data_window_lookback_days`）"、
+  修订 vs 冲突句补"同日重复披露隔离（`DUPLICATE_ANN_DISCLOSURE`）"；
+  ②`contracts/shareholder-data-service.md` §4-3 窗口定义（"窗口 =（水位,
+  目标日前一自然日]"）补回看上限；③`quickstart.md` §3 预期句（"每接口
+  窗口 =（水位, 昨日]"）补回看上限 per plan: 摘要/窗口与修订、ED-004（partial）
+
+## Phase 12: Convergence
+
+- [x] T042 更正两处残留旧表述与宪章 VI 治理登记一致：①`plan.md` 实施阶段 1
+  （"config 扩展（无 Alembic 迁移）"）改为注明迁移 006（`market_data_sync_run.
+  data_kind` 加宽，例外登记见 data-model §2.3）；②`data-model.md` 需求追溯表
+  "无新 MySQL 表（宪章 VI 不适用）"改为"无新 MySQL 表；审计表一项结构性变更
+  （迁移 006）已按宪章 VI 登记（§2.3）" per plan: 实施阶段 1、data-model: 需求追溯表（partial）

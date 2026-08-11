@@ -37,7 +37,7 @@ REDIS_PASSWORD=<compose 的 redis 密码>
 
 ```bash
 docker compose up -d --build --wait
-uv run alembic upgrade head        # 本功能无新迁移，验证既有迁移无异常
+uv run alembic upgrade head        # 含迁移 006：market_data_sync_run.data_kind 加宽 String(16)→32
 uv run python -m lucking.clickhouse migrate   # 创建 shareholder_holding / shareholder_count 表
 uv run prefect deployment apply prefect.yaml
 ```
@@ -60,7 +60,8 @@ uv run prefect deployment run "股东人数交易日同步/股东人数交易日
 预期（`logs/shareholder_data/shareholder_data.jsonl` 与 MySQL 审计表，
 三个接口各一条独立 run/终态）：
 
-- 每接口窗口 =（本接口 `max(ann_date)` 水位, 昨日]，按公告日提取；
+- 每接口窗口 =（本接口 `max(ann_date)` 水位, 昨日]，最多回看 30 天
+  （`shareholder_data_window_lookback_days`），按公告日提取；
   无新公告日时直接 `SUCCEEDED` 且不调用来源；run 终态 `SUCCEEDED`，
   计数齐全；
 - `shareholder_holding` 按 `(end_date, stock_id, holder_kind, holder_name)`
@@ -77,6 +78,14 @@ uv run prefect deployment run "股东人数交易日同步/股东人数交易日
 重复执行同一 `scheduled_at`：run_key 唯一（含 `data_kind` 维度），
 第二次不重复处理（幂等）；无新公告的交易日不重复调用来源
 （对比请求计数日志）。
+
+**实跑记录（2026-08-06/08-07 真实账户）**：三增量 Deployment 连续两个
+交易日 COMPLETED（08-06 17:00/17:05/17:10 与 08-07 同日，错峰串行无叠加）；
+窗口回看上限生效——08-06 持仓表为空时窗口从 612 天收缩至 30 天
+（`shareholder_data_window_lookback_days=30`），单次提取秒级完成；
+水位自愈验证——`max(ann_date)` 随逐日同步从 08-05 → 08-06 → 08-07
+推进，窗口逐日收敛为单日；同日重复披露隔离实测见 §6；非交易日
+（08-08/09 周末）无 run 触发。
 
 ## 4. 初始化回补与幂等（每接口独立 Flow）
 
@@ -101,6 +110,13 @@ uv run prefect deployment run "股东人数历史回补/股东人数历史回补
   （检查 Provider 请求计数日志）；失败日期修复后重跑只处理失败日期；
 - 回补与增量重叠的日期数据一致（同键替换，无重复）。
 
+**实跑记录（2026-08-06）**：`repair-*` 批次（08-03..08-05/08-06）逐日
+独立终态、已成功日期重跑 SKIP 幂等（审计 run 不重复处理）；同日全量
+回补 `stk_holdernumber` 2024-01-01 起 ~614 日 ≈ 13 分钟 @≤400/min
+完成（`shareholder_count` 全量 2024-01-01..08-07）；持仓按报告期季度末
+覆盖 2024-09-30 起（`shareholder_holding` 2,900 行）；增量与回补重叠
+日期同键替换无重复记录。
+
 ## 5. 非交易日
 
 触发任一增量 Flow（如周末的 `scheduled_at`）：该 Flow 终态
@@ -119,7 +135,17 @@ uv run prefect deployment run "股东人数历史回补/股东人数历史回补
   （按 research 待验证项处理）；不得猜测参数绕过门禁。
 - 冲突：非新公告的同键值变化整批失败（`RECORD_CONFLICT`），不得任意
   覆盖；**新公告**（更正公告）的值变化属正常修订，按最新公告更新
-  （`updated_count`），不产生告警。
+  （`updated_count`），不产生告警；**同日重复披露**（同键同日两次公告、
+  数值略异）保留首见、后见隔离为质量 issue（`DUPLICATE_ANN_DISCLOSURE`），
+  不整批失败（ED-004 修订，2026-08-06 实测：300852.SZ 四会富仕 温一峰
+  3709894.0 vs 3709912.0）。
+
+**实跑记录（2026-08-06/08-07）**：实测失败分类处置——top10 空表 612 天
+积压 + 网络错误于 1500 秒截止触发 `PROVIDER_DEADLINE`（修复：窗口回看
+上限）；`TOP10_FLOAT_HOLDERS` 18 字符超出 `data_kind` String(16) 触发
+`DataError (1406)`（修复：迁移 006 加宽）；`RECORD_CONFLICT` 同日重复
+披露（修复：`DUPLICATE_ANN_DISCLOSURE` 隔离）。三类失败均保留已有数据、
+修复后重跑 SUCCEEDED。
 - 中断恢复：租约过期（2100 秒）后 attempt 置 ABANDONED，可重新认领重跑；
   重试归属原计划交易日，不串日；失败日的公告由下一运行的自然窗口覆盖。
 
@@ -156,5 +182,14 @@ uv run prefect deployment run "股东人数历史回补/股东人数历史回补
    ≈ 秒级、`股东人数` ~630 次 ≈ 2 分钟；3 Flow 拆分后按接口独立回补）。
 7. 实测更正公告重复披露形态：同一业务身份多个 ann_date 的记录按最新
    公告值收敛且不触发冲突。
-8. 实测三接口错峰调度（17:00/17:05/17:10）串行执行无叠加：
-   并发触发时审计 run 各自独立、请求计数合计不超过账户限流。
+8. ✅ 已实测（2026-08-06/08-07）：三接口错峰调度串行执行无叠加
+   （时间线见 research 待验证项 8）。
+9. ✅ 真实账户冒烟门禁（2026-08-06/08-07，T031）：三接口全链路
+   （TushareShareholderDataProvider → ShareholderDataService →
+   ClickHouse）真实发布成功——`shareholder_holding` 2,900 行
+   （2024-09-30..2026-08-05，含披露高峰日）、`shareholder_count` 全量
+   （2024-01-01..2026-08-07）；白名单与响应字段逐名一致（全程无
+   "字段集合不精确"错误）；`has_more` 收尾 `continuation_exhausted=True`
+   无截断；`hold_amount` 大数（亿级股）无 Decimal 溢出；received/added
+   计数与行数一致；失败类别（`PROVIDER_DEADLINE`/`DataError`/
+   `RECORD_CONFLICT`）记录于 issue 表。

@@ -40,13 +40,25 @@ def call(api_name: str, params: dict[str, object], label: str) -> None:
 
 
 # 1. top10_holders offset 翻页（报告期 20260331 共 ~54k 行，每页 6000）
-call("top10_holders", {"start_date": "20260331", "end_date": "20260331", "offset": 6000, "limit": 6000},
-     "top10_holders offset=6000 报告期=20260331")
-call("top10_holders", {"start_date": "20260331", "end_date": "20260331", "offset": 12000, "limit": 6000},
-     "top10_holders offset=12000 报告期=20260331")
+call(
+    "top10_holders",
+    {"start_date": "20260331", "end_date": "20260331", "offset": 6000, "limit": 6000},
+    "top10_holders offset=6000 报告期=20260331",
+)
+call(
+    "top10_holders",
+    {"start_date": "20260331", "end_date": "20260331", "offset": 12000, "limit": 6000},
+    "top10_holders offset=12000 报告期=20260331",
+)
 
 # 2. stk_holdernumber 三日窗口是否触顶 + offset 翻页
-call("stk_holdernumber", {"start_date": "20260428", "end_date": "20260430"},
-     "stk_holdernumber 3日窗口（查 has_more）")
-call("stk_holdernumber", {"start_date": "20260428", "end_date": "20260430", "offset": 6000, "limit": 6000},
-     "stk_holdernumber 3日窗口 offset=6000")
+call(
+    "stk_holdernumber",
+    {"start_date": "20260428", "end_date": "20260430"},
+    "stk_holdernumber 3日窗口（查 has_more）",
+)
+call(
+    "stk_holdernumber",
+    {"start_date": "20260428", "end_date": "20260430", "offset": 6000, "limit": 6000},
+    "stk_holdernumber 3日窗口 offset=6000",
+)

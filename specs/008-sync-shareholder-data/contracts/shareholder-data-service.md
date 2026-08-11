@@ -107,9 +107,11 @@ class ShareholderDataSyncResult:
    **必须按接口（kind）分别取水位**：两 top10 接口写入同一张表，
    若用表级水位，先运行的接口会把后运行接口的当日数据一并跳过
    （后者的 `max(ann_date)` 已被前者推进）；表空则水位 = `2024-01-01`。
-   窗口 =（水位, 目标日前一自然日]，逐日展开；无窗口（水位 ≥ 昨日）
-   时直接成功终态，不调用来源。回补忽略水位，窗口 = `[start_date,
-   end_date]`。
+   窗口 =（水位, 目标日前一自然日]，逐日展开，最多回看 30 天
+   （`shareholder_data_window_lookback_days`：start = max(水位+1,
+   目标日-30)，表空/水位陈旧时限制单次提取规模，深历史由回补覆盖）；
+   无窗口（水位 ≥ 昨日）时直接成功终态，不调用来源。回补忽略水位，
+   窗口 = `[start_date, end_date]`。
 4. **提取（按接口）**：`TOP10_HOLDERS`/`TOP10_FLOAT_HOLDERS` 用
    `ann_date=YYYYMMDD`、`HOLDER_COUNT` 用 `start_date=end_date=YYYYMMDD`
    全市场查询（不传 ts_code），逐公告日调用；Provider 内部

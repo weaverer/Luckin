@@ -77,6 +77,13 @@ _ALLOWED_FIELDS = {
     "window_timeliness",
     "status",
     "skipped",
+    "request_id",
+    "summary_id",
+    "task_key",
+    "notification_attempt_id",
+    "method",
+    "path",
+    "http_status",
 }
 
 
@@ -222,10 +229,25 @@ def safe_identifier_hash(value: str) -> str:
 def _redact(value: Any) -> Any:
     if not isinstance(value, str):
         return value
+    value = re.sub(
+        r"https://open\.feishu\.cn/open-apis/bot/v2/hook/[A-Za-z0-9_-]+",
+        "[REDACTED_WEBHOOK]",
+        value,
+    )
     value = re.sub(r"(?i)(token|password|secret)\s*[=:]\s*[^\s]+", r"\1=[REDACTED]", value)
     value = re.sub(
         r"(?i)\b(?:mysql(?:\+pymysql)?|postgresql|redis)://[^\s]+",
         "[REDACTED_CONNECTION]",
+        value,
+    )
+    value = re.sub(
+        r"(?is)(provider[_ -]?(?:raw )?response|raw[_ -]?response)\s*[=:].*",
+        r"\1=[REDACTED]",
+        value,
+    )
+    value = re.sub(
+        r"(?is)(traceback \(most recent call last\):|(?:select|insert|update|delete)\s+).*",
+        "[REDACTED_DIAGNOSTIC]",
         value,
     )
     return value[:500]

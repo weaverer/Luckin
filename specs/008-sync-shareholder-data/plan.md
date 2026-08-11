@@ -31,11 +31,14 @@ Flow 串行执行，时间轴可预期（账户级限流由 Redis 分布式节�
 `TOP10_HOLDERS`/`TOP10_FLOAT_HOLDERS`/`HOLDER_COUNT`，与 005 每接口
 一取值模式一致）；股票身份**复用 003** 的 `stock_current`/
 `stock_provider_mapping`（不新建 MySQL 表、无 DDL 变更）。
-增量窗口 =（本接口 `max(ann_date)` 水位, 昨日]（按接口/kind 分别取
-水位——两 top10 接口同表写入，表级水位会跳日），水位自愈——失败
-交易日由下一运行的自然窗口覆盖；更正公告（新 ann_date 同身份值变化）
-按最新公告修订更新（`updated_count`），非新公告值变化
-`RECORD_CONFLICT` 整批失败。实现沿用 005/006/007 已验证的
+增量窗口 =（本接口 `max(ann_date)` 水位, 昨日]，最多回看 30 天
+（`shareholder_data_window_lookback_days`：表空/水位陈旧时限制单次
+提取规模，深历史由回补覆盖）（按接口/kind 分别取水位——两 top10
+接口同表写入，表级水位会跳日），水位自愈——失败交易日由下一运行的
+自然窗口覆盖；更正公告（新 ann_date 同身份值变化）按最新公告修订
+更新（`updated_count`），非新公告值变化 `RECORD_CONFLICT` 整批失败；
+**同日重复披露**（同键同日两次公告、数值略异）保留首见、后见隔离
+为质量 issue（`DUPLICATE_ANN_DISCLOSURE`），不整批失败。实现沿用 005/006/007 已验证的
 「Port 契约 + Tushare Adapter + Service 编排 + MySQL 审计 + ClickHouse
 发布 + Prefect 参数化 Flow」模式（详见 research.md 决策 1~7）。
 
@@ -48,8 +51,9 @@ SQLAlchemy/Alembic（MySQL 审计与身份读取）、pydantic-settings（配置
 不新增 tushare SDK、clickhouse-driver 或任何新依赖（沿用 005/006/007 的
 HTTP 直连模式）
 
-**存储**：MySQL（身份读取复用 003 两表 + 审计复用 005 三表，
-**无新建表、无结构性 DDL 变更**）；ClickHouse（新建 `shareholder_holding`
+**存储**：MySQL（身份读取复用 003 两表 + 审计复用 005 三表，**无新建表**；
+审计表 `market_data_sync_run.data_kind` 经迁移 006 加宽 String(16)→32，
+宪章 VI 例外登记见 data-model.md §2.3）；ClickHouse（新建 `shareholder_holding`
 与 `shareholder_count`，均 `ReplacingMergeTree(updated_at)`，
 `PARTITION BY toYYYYMM(end_date)`，排序键见 data-model §3）
 
@@ -106,10 +110,17 @@ ClickHouse、Redis、Prefect Server（沿用 compose.yml，端口仅绑定 127.0
   `shareholder_count` 水位——两 top10 接口同表写入，表级水位会让先
   运行的接口把后运行接口的当日公告跳过）；表空则水位 = `2024-01-01`
   （与回补起点一致，首轮重叠幂等衔接）；水位 ≥ 昨日时直接成功终态，
-  不调用来源。
+  不调用来源。**计划增量窗口最多回看 30 天**
+  （`shareholder_data_window_lookback_days`）：表空/水位陈旧时
+  start = max(水位+1, 目标日-30)，单次提取规模受限，更深历史由显式
+  回补覆盖（实测 2026-08-06 空表 612 天积压超出 1500 秒截止触发
+  `PROVIDER_DEADLINE`）。
 - 修订 vs 冲突（FR-010/ED-010）：同身份值变化按 `ann_date` 锚点判定——
   入站 ann_date > 既有 ann_date 为正常修订（更新，计 `updated_count`）；
   否则 `RECORD_CONFLICT` 整批失败，不得任意覆盖。
+  **批内同日重复披露**（同键同日两次公告、数值略异，实测 2026-08-06
+  温一峰 3709894.0 vs 3709912.0）→ 保留首见、后见隔离为质量 issue
+  （`DUPLICATE_ANN_DISCLOSURE`），不整批失败（ED-004 修订）。
 - 单批候选以一次 ClickHouse 批量 INSERT（block 级原子）写入，成功后
   在同一 MySQL 事务写 attempt/run 成功终态；失败不清空已有数据。
 - 股票身份以 003 主数据为权威：`provider_mappings("tushare")` 解析
@@ -169,10 +180,13 @@ ClickHouse、Redis、Prefect Server（沿用 compose.yml，端口仅绑定 127.0
   问题类别全集，含 `UNKNOWN_STOCK_IDENTITY`）；JsonlLogStore 结构化日志
   与窗口及时性；quickstart.md §7 五分钟排障、§8 上线门禁；非交易日
   SKIPPED 不产生误告警。
-- **MySQL 表结构**：通过（不适用）。本功能不新建、不结构性修改任何
-  MySQL 业务表——身份表读取复用 003（`provider_mappings` 只读）、审计表
-  复用 005（仅 `DataKind` 枚举新增取值，无列变更）；无 Alembic 迁移；
-  宪章 VI 逐表治理对本功能无适用对象，复用表治理义务仍归属其创建功能。
+- **MySQL 表结构**：通过（一项例外已登记）。本功能不新建 MySQL 业务表；
+  审计表复用 005（`DataKind` 枚举新增取值 `TOP10_HOLDERS`/
+  `TOP10_FLOAT_HOLDERS`/`HOLDER_COUNT`）。**结构性变更一项**：2026-08-06
+  实测 `TOP10_FLOAT_HOLDERS`（18 字符）超出 `market_data_sync_run.data_kind`
+  String(16) 列宽，run 认领 INSERT 报 `DataError (1406)`，已通过迁移 006
+  加宽为 String(32)——例外字段、业务理由、唯一性保障与迁移影响按宪章 VI
+  登记于 data-model.md §2.3；复用表其余治理义务仍归属其创建功能（005）。
 - **简洁性**：通过。不新增框架/服务/依赖；节流复用 007 泛化的共享
   `RateLimiter`（仅新配置），前十大股东与前十大流通股东合并为一张
   ClickHouse 表（`holder_kind` 判别），与 006/007 相比不增加新抽象。
@@ -200,8 +214,10 @@ ClickHouse、Redis、Prefect Server（沿用 compose.yml，端口仅绑定 127.0
   `data_kind` 按接口取值（`TOP10_HOLDERS`/`TOP10_FLOAT_HOLDERS`/
   `HOLDER_COUNT`）使三接口运行状态可直接定位；
   quickstart §7/§8 提供运行验证与上线实测步骤（含故障隔离验证）。
-- **MySQL 表结构**：通过（不适用）。设计确认无新建/无结构性变更
-  （data-model §2.3），无例外申请。
+- **MySQL 表结构**：通过（一项例外已登记）。设计确认无新建表；上线实测
+  发现审计表 `data_kind` 列宽不足（`TOP10_FLOAT_HOLDERS` 18 字符 > 16），
+  经迁移 006 加宽 String(16)→32，例外登记于 data-model.md §2.3
+  （宪章 VI 要求的结构性变更逐表治理）。
 - **简洁性**：通过。复杂度跟踪无违反项；两接口共用一张表与水位自愈
   设计（research 决策 2/6）比独立表 + 独立水位存储更简单；3 接口拆分
   为 3 套 Flow 为用户显式要求（非新增抽象，与 005 每接口独立
@@ -289,7 +305,9 @@ repositories/services/flows/models 各一文件），理由：股东数据按公
    `TOP10_FLOAT_HOLDERS`/`HOLDER_COUNT` 枚举、
    `shareholder_data` 规范 DTO 与 `SHAREHOLDER_DATA_FIELDS` 白名单、
    ClickHouse `shareholder_holding`/`shareholder_count` DDL 与 migrate
-   注册、config 扩展（无 Alembic 迁移）。
+   注册、config 扩展（阶段内无 Alembic 迁移；上线实测发现审计表
+   `market_data_sync_run.data_kind` 列宽不足后经迁移 006 加宽，例外登记
+   见 data-model.md §2.3）。
 2. **阶段 2：Provider 契约与 Adapter**——`ShareholderDataProvider` Port
    （三提取方法）、`TushareShareholderDataProvider`（字段白名单、`has_more`
    /offset 分页、节流器 400/min、重试/错误映射、完整性门禁）、Registry、
@@ -331,3 +349,7 @@ research 决策 6 备选方案）；错峰调度保留为运维友好（账户�
 Redis 分布式节流器强保证）。
 ④ 自建股票身份表——被拒（与 003 重复，产生两套身份事实来源，
 research 决策 3）。
+⑥ 计划增量窗口回看上限 30 天（`shareholder_data_window_lookback_days`）——
+备选"表空时一次性全量窗口（2024-01-01 起）"被拒（实测 612 天积压 +
+网络错误在 1500 秒截止内取不完，触发 `PROVIDER_DEADLINE` 整批失败；
+深历史由显式回补覆盖，增量随水位逐日自愈收敛）。

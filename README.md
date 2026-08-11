@@ -14,6 +14,50 @@
 复合身份、分区或框架内部表等特殊场景必须在功能计划和数据模型中逐表记录并通过宪章
 检查，不得以口头约定跳过。
 
+项目拥有的公共 JSON API（HTTP 204、二进制和流式接口除外）统一返回
+`code`、`message`、`data`、`errors`、`request_id`、`timestamp`。成功使用 `code=0`；
+失败保留正确的 HTTP 4xx/5xx 状态并返回非零业务码，禁止用 HTTP 200 包装失败。分页数据
+统一放在 `data.items` 和 `data.pagination`，具体模型和业务码以 OpenAPI 为准。
+
+## 投资工作台
+
+工作台后端、前端和 20:00 汇总通知的完整验收步骤见
+[快速验证](specs/009-investment-workbench/quickstart.md)。完成基础设施启动后，执行迁移并预置
+管理员账号；账号名和显示名是位置参数，密码由终端交互读取：
+
+```bash
+uv sync --all-groups
+uv run alembic upgrade head
+uv run python -m lucking.admin create-user majie 超级管理员
+pnpm --dir frontend install --frozen-lockfile
+```
+
+分别启动 API 和前端：
+
+```bash
+uv run uvicorn lucking.api.main:create_app --factory --host 127.0.0.1 --port 8000 --reload
+pnpm --dir frontend dev
+```
+
+浏览器访问 <http://127.0.0.1:5173>；API 健康检查使用
+`curl -fsS http://127.0.0.1:8000/healthz`。生产环境必须启用 Secure Cookie。飞书真实值只放在
+本机 `.env` 的 `FEISHU_WEBHOOK_URL` 和可选 `FEISHU_SIGNING_SECRET`，不得使用 `VITE_` 前缀。
+
+每日汇总固定为 `Asia/Shanghai` 20:00。部署并启动 Worker：
+
+```bash
+uv run prefect --no-prompt deploy --name 每日任务汇总通知
+uv run prefect --no-prompt deploy --name 每日任务汇总补发
+uv run prefect worker start --pool local-pool --type process
+```
+
+请求日志 `logs/workbench-api.jsonl` 可按 `request_id` 关联；汇总日志
+`logs/daily-task-summary.jsonl` 可按 `summary_id`、`task_key`、`flow_run_id` 和 `attempt`
+关联。通知失败时先在任务状态页确认原快照和 attempt，再使用补发 Deployment 传入原
+`summary_id`，补发不会重新统计。安全停止时先暂停汇总 Deployment，再停止 Worker；不要删除
+数据库卷或汇总审计记录。亮/暗主题、860px/620px 断点、键盘焦点、六态非颜色表达、3 秒首屏与
+2 秒股票搜索均按快速验证中的视觉与性能清单验收。
+
 ## Windows / WSL2 开发基础设施
 
 应用进程在 WSL2 Ubuntu 本机运行，Docker Compose 只负责 MySQL、

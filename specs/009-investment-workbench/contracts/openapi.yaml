@@ -1,0 +1,1146 @@
+openapi: 3.1.0
+info:
+  title: Lucking 投资工作台 API
+  version: 1.0.0
+  description: 前端唯一公共契约；所有端点均为同域 /api/v1 路径。
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /auth/login:
+    post:
+      security: []
+      summary: 账号密码登录
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功并设置 HttpOnly 会话 Cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/logout:
+    post:
+      summary: 退出当前会话
+      operationId: logout
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: 当前会话已删除并清除 Cookie
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/me:
+    get:
+      summary: 获取当前用户和 CSRF Token
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: 当前会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /auth/password:
+    put:
+      summary: 修改当前用户密码并撤销全部会话
+      operationId: changePassword
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: 密码修改成功，全部会话已撤销
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /calendar:
+    get:
+      summary: 获取交易日历和当前用户重要日
+      operationId: listCalendar
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: end_date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: market_code
+          in: query
+          schema: { type: string, enum: [CN-S], default: CN-S }
+      responses:
+        '200':
+          description: 日期范围结果；交易日缺失必须返回 UNKNOWN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /important-dates:
+    post:
+      summary: 新增当前用户重要日
+      operationId: createImportantDate
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImportantDateInput' }
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportantDateResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /important-dates/{important_date_id}:
+    put:
+      summary: 修改当前用户重要日
+      operationId: updateImportantDate
+      parameters:
+        - $ref: '#/components/parameters/ImportantDateId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImportantDateInput' }
+      responses:
+        '200':
+          description: 修改成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportantDateResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: 删除当前用户重要日
+      operationId: deleteImportantDate
+      parameters:
+        - $ref: '#/components/parameters/ImportantDateId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204': { description: 删除成功 }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /stocks:
+    get:
+      summary: 查询股票列表
+      operationId: listStocks
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 80 }
+        - name: venue_code
+          in: query
+          schema: { type: string, enum: [XSHG, XSHE, XBSE] }
+        - name: listing_status
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 稳定分页的股票列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StockListResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /stocks/{stock_id}:
+    get:
+      summary: 获取股票详情和最新行情状态
+      operationId: getStock
+      parameters:
+        - $ref: '#/components/parameters/StockId'
+      responses:
+        '200':
+          description: 股票详情
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StockDetailResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /stocks/{stock_id}/daily-quotes:
+    get:
+      summary: 获取股票日线行情区间
+      operationId: listDailyQuotes
+      parameters:
+        - $ref: '#/components/parameters/StockId'
+        - name: start_date
+          in: query
+          schema: { type: string, format: date }
+        - name: end_date
+          in: query
+          schema: { type: string, format: date }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 400, default: 120 }
+      responses:
+        '200':
+          description: 按交易日升序的行情；停牌日不合成记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyQuoteListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /watchlists:
+    get:
+      summary: 获取当前用户自选分组及成员
+      operationId: listWatchlists
+      responses:
+        '200':
+          description: 自选分组
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: 创建当前用户自选分组
+      operationId: createWatchlist
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WatchlistGroupInput' }
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WatchlistGroupResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /watchlists/order:
+    put:
+      summary: 调整当前用户全部自选分组顺序
+      operationId: orderWatchlists
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_ids]
+              properties:
+                group_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 排序后的自选分组
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WatchlistListResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /watchlists/{group_id}:
+    put:
+      summary: 修改当前用户自选分组
+      operationId: updateWatchlist
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WatchlistGroupInput' }
+      responses:
+        '200':
+          description: 修改成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WatchlistGroupResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: 删除当前用户自选分组及成员
+      operationId: deleteWatchlist
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204': { description: 删除成功 }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /watchlists/{group_id}/members:
+    post:
+      summary: 向当前用户自选分组添加股票
+      operationId: addWatchlistMember
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stock_id]
+              properties:
+                stock_id: { type: string, format: uuid }
+      responses:
+        '201':
+          description: 添加成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WatchlistMemberResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /watchlists/{group_id}/members/{stock_id}:
+    delete:
+      summary: 从当前用户自选分组移除股票
+      operationId: removeWatchlistMember
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/StockId'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204': { description: 移除成功 }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /broker-recommendations:
+    get:
+      summary: 查询券商金股
+      operationId: listBrokerRecommendations
+      parameters:
+        - name: recommendation_month
+          in: query
+          required: true
+          description: 推荐月份，以当月首日表示
+          schema: { type: string, format: date, pattern: '^\d{4}-\d{2}-01$' }
+        - name: broker_name
+          in: query
+          schema: { type: string, maxLength: 160 }
+        - name: stock_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 券商金股分页结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrokerRecommendationListResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /task-status:
+    get:
+      summary: 获取指定业务日期的实时归一任务状态
+      operationId: listTaskStatus
+      parameters:
+        - name: business_date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 任务状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskStatusApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /task-summaries/{business_date}:
+    get:
+      summary: 获取 20:00 持久化任务汇总快照
+      operationId: getTaskSummary
+      parameters:
+        - name: business_date
+          in: path
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 汇总快照及通知状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskSummaryApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /j-gold/research:
+    get:
+      summary: 获取 J金股研究驾驶舱
+      operationId: getJGoldResearch
+      parameters:
+        - name: recommendation_month
+          in: query
+          schema: { type: string, format: date }
+        - name: broker_name
+          in: query
+          schema: { type: string, maxLength: 160 }
+        - name: industry
+          in: query
+          schema: { type: string, maxLength: 160 }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 同一筛选范围的驾驶舱结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JGoldResearchResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /j-gold/stocks/{stock_id}:
+    get:
+      summary: 获取可追溯的 J金股股票详情
+      operationId: getJGoldStockResearch
+      parameters:
+        - $ref: '#/components/parameters/StockId'
+        - name: recommendation_month
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: 股票研究详情
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JGoldStockResearchResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: lucking_session
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string, minLength: 32, maxLength: 256 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    ImportantDateId:
+      name: important_date_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GroupId:
+      name: group_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    StockId:
+      name: stock_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    BadRequest:
+      description: 请求字段或业务范围无效
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BadRequestErrorResponse' }
+    Unauthorized:
+      description: 未认证或会话已失效
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UnauthorizedErrorResponse' }
+    Forbidden:
+      description: CSRF、同源或资源所有权校验失败
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ForbiddenErrorResponse' }
+    NotFound:
+      description: 资源不存在或不属于当前用户
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/NotFoundErrorResponse' }
+    Conflict:
+      description: 唯一性或并发版本冲突
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ConflictErrorResponse' }
+    RateLimited:
+      description: 请求频率受限
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/RateLimitedErrorResponse' }
+    ServiceUnavailable:
+      description: 外部依赖暂时不可用
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ServiceUnavailableErrorResponse' }
+    InternalServerError:
+      description: 未预期服务错误；不得返回堆栈、SQL、秘密或第三方原始响应
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/InternalServerErrorResponse' }
+  schemas:
+    BusinessErrorCode:
+      type: integer
+      description: 稳定业务错误码；HTTP 状态表达协议结果，业务码表达应用原因
+      enum:
+        - 100001
+        - 100002
+        - 100003
+        - 200001
+        - 200002
+        - 200003
+        - 300001
+        - 400001
+        - 400002
+        - 400003
+        - 400004
+        - 500001
+        - 500002
+        - 900001
+      x-enum-varnames:
+        - INVALID_CREDENTIALS
+        - SESSION_INVALID
+        - CSRF_VALIDATION_FAILED
+        - REQUEST_VALIDATION_FAILED
+        - QUERY_RANGE_INVALID
+        - PASSWORD_POLICY_VIOLATION
+        - RESOURCE_NOT_FOUND
+        - IMPORTANT_DATE_CONFLICT
+        - WATCHLIST_NAME_CONFLICT
+        - WATCHLIST_MEMBER_CONFLICT
+        - WATCHLIST_CAPACITY_EXCEEDED
+        - RATE_LIMITED
+        - EXTERNAL_DEPENDENCY_UNAVAILABLE
+        - INTERNAL_SERVER_ERROR
+    ErrorDetail:
+      type: object
+      required: [field, code, message]
+      properties:
+        field: { type: [string, 'null'] }
+        code: { type: string }
+        message: { type: string }
+    Pagination:
+      type: object
+      required: [limit, offset, total, has_more]
+      properties:
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0 }
+        has_more: { type: boolean }
+    SuccessResponseBase:
+      type: object
+      required: [code, message, errors, request_id, timestamp]
+      properties:
+        code: { type: integer, const: 0 }
+        message: { type: string, const: '' }
+        errors:
+          type: array
+          maxItems: 0
+          items: { $ref: '#/components/schemas/ErrorDetail' }
+        request_id: { type: string, minLength: 1 }
+        timestamp: { type: string, format: date-time }
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, data, errors, request_id, timestamp]
+      properties:
+        code: { $ref: '#/components/schemas/BusinessErrorCode' }
+        message: { type: string, minLength: 1 }
+        data: { type: 'null' }
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/ErrorDetail' }
+        request_id: { type: string, minLength: 1 }
+        timestamp: { type: string, format: date-time }
+    BadRequestErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, enum: [200001, 200002, 200003] }
+    UnauthorizedErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, enum: [100001, 100002] }
+    ForbiddenErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, const: 100003 }
+    NotFoundErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, const: 300001 }
+    ConflictErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, enum: [400001, 400002, 400003, 400004] }
+    RateLimitedErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, const: 500001 }
+    ServiceUnavailableErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, const: 500002 }
+    InternalServerErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            code: { type: integer, const: 900001 }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 64 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string, minLength: 1, maxLength: 128 }
+        new_password: { type: string, minLength: 12, maxLength: 128 }
+    User:
+      type: object
+      required: [user_id, username, display_name]
+      properties:
+        user_id: { type: string, format: uuid }
+        username: { type: string }
+        display_name: { type: string }
+    AuthSession:
+      type: object
+      required: [user, csrf_token, expires_at]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        csrf_token: { type: string }
+        expires_at: { type: string, format: date-time }
+    ImportantDateInput:
+      type: object
+      required: [event_date, title]
+      properties:
+        event_date: { type: string, format: date }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        notes: { type: [string, 'null'], maxLength: 1000 }
+    ImportantDate:
+      allOf:
+        - $ref: '#/components/schemas/ImportantDateInput'
+        - type: object
+          required: [important_date_id, created_at, updated_at]
+          properties:
+            important_date_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    CalendarDay:
+      type: object
+      required: [date, market_code, market_status, important_dates]
+      properties:
+        date: { type: string, format: date }
+        market_code: { type: string, enum: [CN-S] }
+        market_status: { type: string, enum: [OPEN, CLOSED, UNKNOWN] }
+        previous_open_date: { type: [string, 'null'], format: date }
+        calendar_updated_at: { type: [string, 'null'], format: date-time }
+        important_dates:
+          type: array
+          items: { $ref: '#/components/schemas/ImportantDate' }
+    StockSummary:
+      type: object
+      required: [stock_id, market_code, venue_code, security_code, name, listing_status]
+      properties:
+        stock_id: { type: string, format: uuid }
+        market_code: { type: string }
+        venue_code: { type: string }
+        security_code: { type: string }
+        name: { type: string }
+        listing_status: { type: string }
+    StockDetail:
+      allOf:
+        - $ref: '#/components/schemas/StockSummary'
+        - type: object
+          required: [market_data_status]
+          properties:
+            latest_quote: { oneOf: [{ $ref: '#/components/schemas/DailyQuote' }, { type: 'null' }] }
+            market_data_status: { type: string, enum: [CURRENT, STALE, MISSING] }
+    DailyQuote:
+      type: object
+      required: [trade_date, open, high, low, close, pre_close, change, pct_chg, vol, amount, updated_at]
+      properties:
+        trade_date: { type: string, format: date }
+        open: { type: string }
+        high: { type: string }
+        low: { type: string }
+        close: { type: string }
+        pre_close: { type: string }
+        change: { type: string }
+        pct_chg: { type: string }
+        vol: { type: string }
+        amount: { type: string }
+        updated_at: { type: string, format: date-time }
+    WatchlistGroupInput:
+      type: object
+      required: [name, notes, tags]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        notes: { type: string, minLength: 1, maxLength: 1000 }
+        tags:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 30 }
+    WatchlistMember:
+      type: object
+      required: [member_id, stock, sort_order]
+      properties:
+        member_id: { type: string, format: uuid }
+        stock: { $ref: '#/components/schemas/StockSummary' }
+        sort_order: { type: integer, minimum: 0 }
+    WatchlistGroup:
+      allOf:
+        - $ref: '#/components/schemas/WatchlistGroupInput'
+        - type: object
+          required: [group_id, sort_order, members]
+          properties:
+            group_id: { type: string, format: uuid }
+            sort_order: { type: integer, minimum: 0 }
+            members:
+              type: array
+              items: { $ref: '#/components/schemas/WatchlistMember' }
+    BrokerRecommendation:
+      type: object
+      required: [recommendation_id, recommendation_month, broker_name, stock, updated_at]
+      properties:
+        recommendation_id: { type: string, format: uuid }
+        recommendation_month:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-01$'
+          description: 推荐月份，以当月首日表示
+        broker_name: { type: string }
+        stock: { $ref: '#/components/schemas/StockSummary' }
+        updated_at: { type: string, format: date-time }
+    TaskStatusItem:
+      type: object
+      required: [task_key, schedule_slug, display_name, status, observed_at]
+      properties:
+        task_key: { type: string }
+        schedule_slug: { type: string }
+        display_name: { type: string }
+        status: { type: string, enum: [SUCCEEDED, PARTIAL, FAILED, RUNNING, UNKNOWN, NOT_RUN] }
+        source_run_id: { type: [string, 'null'] }
+        started_at: { type: [string, 'null'], format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        record_count: { type: [integer, 'null'], minimum: 0 }
+        error_category: { type: [string, 'null'] }
+        error_summary: { type: [string, 'null'] }
+        observed_at: { type: string, format: date-time }
+    TaskStatusResponse:
+      type: object
+      required: [business_date, observed_at, items]
+      properties:
+        business_date: { type: string, format: date }
+        observed_at: { type: string, format: date-time }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TaskStatusItem' }
+    TaskSummary:
+      type: object
+      required:
+        - summary_id
+        - business_date
+        - status
+        - notification_status
+        - counts
+        - items
+        - latest_notification_attempt
+      properties:
+        summary_id: { type: string, format: uuid }
+        business_date: { type: string, format: date }
+        status: { type: string, enum: [BUILDING, READY, FAILED] }
+        notification_status: { type: string, enum: [PENDING, SENDING, SENT, FAILED] }
+        generated_at: { type: [string, 'null'], format: date-time }
+        notified_at: { type: [string, 'null'], format: date-time }
+        counts: { $ref: '#/components/schemas/TaskStatusCounts' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TaskStatusItem' }
+        latest_notification_attempt:
+          oneOf: [{ $ref: '#/components/schemas/NotificationAttempt' }, { type: 'null' }]
+    TaskStatusCounts:
+      type: object
+      additionalProperties: false
+      required: [SUCCEEDED, PARTIAL, FAILED, RUNNING, UNKNOWN, NOT_RUN]
+      properties:
+        SUCCEEDED: { type: integer, minimum: 0 }
+        PARTIAL: { type: integer, minimum: 0 }
+        FAILED: { type: integer, minimum: 0 }
+        RUNNING: { type: integer, minimum: 0 }
+        UNKNOWN: { type: integer, minimum: 0 }
+        NOT_RUN: { type: integer, minimum: 0 }
+    NotificationAttempt:
+      type: object
+      additionalProperties: false
+      required:
+        - attempt_no
+        - trigger_kind
+        - status
+        - error_category
+        - error_summary
+        - started_at
+        - completed_at
+        - retryable
+      properties:
+        attempt_no: { type: integer, minimum: 1 }
+        trigger_kind: { type: string, enum: [AUTOMATIC, MANUAL_RETRY] }
+        status: { type: string, enum: [RUNNING, SUCCEEDED, FAILED] }
+        error_category: { type: [string, 'null'] }
+        error_summary: { type: [string, 'null'] }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        retryable: { type: boolean }
+    StockPageData:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/StockSummary' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+    BrokerRecommendationPageData:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BrokerRecommendation' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+    AuthSessionResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/AuthSession' }
+    CalendarResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/CalendarDay' }
+    ImportantDateResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/ImportantDate' }
+    StockListResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/StockPageData' }
+    StockDetailResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/StockDetail' }
+    DailyQuoteListResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/DailyQuote' }
+    WatchlistListResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/WatchlistGroup' }
+    WatchlistGroupResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/WatchlistGroup' }
+    WatchlistMemberResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/WatchlistMember' }
+    BrokerRecommendationListResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/BrokerRecommendationPageData' }
+    TaskStatusApiResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/TaskStatusResponse' }
+    TaskSummaryApiResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/TaskSummary' }
+    JGoldResearchData:
+      type: object
+      required: [metrics, items, pagination, signals, industries, broker_ability, diffusion, quality, selected_month, available_months]
+      properties:
+        metrics: { type: object, additionalProperties: true }
+        items:
+          type: array
+          items: { type: object, additionalProperties: true }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+        signals: { type: array, items: { type: object, additionalProperties: true } }
+        industries: { type: array, items: { type: object, additionalProperties: true } }
+        broker_ability: { type: array, items: { type: object, additionalProperties: true } }
+        diffusion: { type: array, items: { type: object, additionalProperties: true } }
+        quality: { type: object, additionalProperties: true }
+        selected_month: { type: string, format: date }
+        available_months: { type: array, items: { type: string, format: date } }
+    JGoldStockResearchData:
+      type: object
+      required: [stock, recommendations, history, price_basis, source, generated_at, quality]
+      properties:
+        stock: { $ref: '#/components/schemas/StockSummary' }
+        industry: { type: [string, 'null'] }
+        recommendations: { type: array, items: { type: object, additionalProperties: true } }
+        history: { type: array, items: { type: object, additionalProperties: true } }
+        latest_quote_date: { type: [string, 'null'], format: date }
+        price_basis: { type: string }
+        source: { type: string }
+        generated_at: { type: string, format: date-time }
+        quality: { type: string }
+    JGoldResearchResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/JGoldResearchData' }
+    JGoldStockResearchResponse:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponseBase'
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: '#/components/schemas/JGoldStockResearchData' }

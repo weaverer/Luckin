@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from lucking.clickhouse import ClickHouseClient, migrate
 from lucking.config import Settings
+from lucking.models.stock_list import StockCurrent, StockProviderMapping
+from lucking.models.trading_calendar import TradingCalendar
 from lucking.repositories.market_data import SqlAlchemyMarketDataRepository
 from lucking.repositories.shareholder_data_clickhouse import (
     ShareholderDataClickHouseRepository,
@@ -28,7 +30,6 @@ from lucking.services.shareholder_data import (
     ShareholderDataSyncStatus,
 )
 from tests.contract.shareholder_data_memory import MemoryShareholderDataProvider
-from tests.unit.test_shareholder_data_service import seeded_factory
 
 _STOCKS = (
     ("600000.SH", "XSHG", "600000"),
@@ -55,17 +56,17 @@ def _client(settings: Settings) -> ClickHouseClient:
     )
 
 
-_TEST_STOCK_IDS = "('stock-600000', 'stock-000001', 'stock-300750', 'stock-830799')"
+def _stock_id(code: str) -> str:
+    return f"sh-{_UNIQUE}-{code}"
+
+
+_TEST_STOCK_IDS = "(" + ", ".join(f"'{_stock_id(code)}'" for _, _, code in _STOCKS) + ")"
 
 
 def _cleanup(clickhouse: ClickHouseClient) -> None:
-    # 入站记录的 stock_code 为纯 ts_code（无 _UNIQUE 后缀），必须同时按
-    # 测试专属 stock_id 命名空间清理，防止残留数据推高水位污染后续运行。
-    for table in ("shareholder_holding", "shareholder_count"):
-        clickhouse.execute(
-            f"ALTER TABLE lucking.{table} DELETE WHERE stock_code LIKE '%{_UNIQUE}%' "
-            f"OR stock_id IN {_TEST_STOCK_IDS}"
-        )
+    if not clickhouse.database.startswith("lucking_test_shareholder_"):
+        raise AssertionError("拒绝删除非测试 ClickHouse 数据库")
+    clickhouse.execute_ddl(f"DROP DATABASE IF EXISTS {clickhouse.database}")
 
 
 def _seed_watermark(clickhouse: ClickHouseClient, end_date: date, ann_date: date) -> None:
@@ -74,7 +75,7 @@ def _seed_watermark(clickhouse: ClickHouseClient, end_date: date, ann_date: date
         rows.append(
             {
                 "end_date": end_date,
-                "stock_id": f"stock-{code}",
+                "stock_id": _stock_id(code),
                 "holder_kind": "TOP10",
                 "holder_name": "测试股东",
                 "ann_date": ann_date,
@@ -111,19 +112,30 @@ def _build_service(
     sqlite_session_factory: sessionmaker[Session],
     provider: MemoryShareholderDataProvider | None = None,
 ) -> tuple[ShareholderDataService, MemoryShareholderDataProvider, ClickHouseClient]:
-    provider = provider or MemoryShareholderDataProvider(
-        codes=tuple(p for p, _v, _c in _STOCKS)
-    )
-    settings = Settings()
+    provider = provider or MemoryShareholderDataProvider(codes=tuple(p for p, _v, _c in _STOCKS))
+    base_settings = Settings()
+    test_database = f"lucking_test_shareholder_{uuid4().hex[:12]}"
+    _client(base_settings).execute_ddl(f"CREATE DATABASE {test_database}")
+    settings = Settings(clickhouse_database=test_database)
     migrate(settings)
     clickhouse = _client(settings)
-    _cleanup(clickhouse)
-    session_factory = seeded_factory(sqlite_session_factory)
-    # 扩展交易日历：8/3（周一）开放，供跨月修订验证使用
-    from lucking.models.trading_calendar import TradingCalendar
-
+    session_factory = sqlite_session_factory
     now = datetime.now(UTC).replace(tzinfo=None)
     with session_factory.begin() as session:
+        for day in range(20, 32):
+            session.add(
+                TradingCalendar(
+                    market_code="CN-S",
+                    calendar_date=date(2026, 7, day),
+                    is_open=day not in (25, 26),
+                    previous_open_date=None,
+                    source="tushare",
+                    source_market="CN-S",
+                    sync_mode="monthly",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
         session.add(
             TradingCalendar(
                 market_code="CN-S",
@@ -137,6 +149,35 @@ def _build_service(
                 updated_at=now,
             )
         )
+        for provider_id, venue, code in _STOCKS:
+            stock_id = _stock_id(code)
+            session.add(
+                StockCurrent(
+                    stock_id=stock_id,
+                    market_code="CN-S",
+                    venue_code=venue,
+                    security_code=code,
+                    display_name=f"测试股票{code}",
+                    currency_code="CNY",
+                    listing_status="ACTIVE",
+                    listed_on=date(2000, 1, 1),
+                    delisted_on=None,
+                    last_seen_run_id="seed",
+                    last_seen_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.add(
+                StockProviderMapping(
+                    provider_code="tushare",
+                    provider_security_id=provider_id,
+                    stock_id=stock_id,
+                    last_seen_run_id="seed",
+                    last_seen_at=now,
+                    created_at=now,
+                )
+            )
     repository = SqlAlchemyMarketDataRepository(session_factory, lease_seconds=2100)
     service = ShareholderDataService(
         provider,
@@ -170,7 +211,7 @@ def test_incremental_sync_end_to_end_and_idempotent(
         assert first.status is ShareholderDataSyncStatus.SUCCEEDED
         assert first.added_count == 4
         rows = clickhouse.execute(
-            "SELECT count() AS count FROM lucking.shareholder_holding FINAL "
+            f"SELECT count() AS count FROM {clickhouse.database}.shareholder_holding FINAL "
             f"WHERE stock_id IN {_TEST_STOCK_IDS} AND holder_kind = 'TOP10'"
         )
         assert rows[0]["count"] == 8  # 4 条水位预置 + 4 条新增
@@ -209,7 +250,7 @@ def test_revision_update_new_announcement(
         assert second.status is ShareholderDataSyncStatus.SUCCEEDED
         assert second.updated_count == 4  # 新公告 → 按最新值更新，不冲突
         rows = clickhouse.execute(
-            "SELECT hold_amount FROM lucking.shareholder_holding FINAL "
+            f"SELECT hold_amount FROM {clickhouse.database}.shareholder_holding FINAL "
             f"WHERE stock_id IN {_TEST_STOCK_IDS} AND holder_kind = 'TOP10' "
             "AND holder_name = '测试股东' AND end_date = '2026-07-28' LIMIT 1"
         )
@@ -232,7 +273,7 @@ def test_failure_terminal_state_preserves_data(
             service.sync_top10_holders(_scheduled())
         # 既有数据不受影响
         rows = clickhouse.execute(
-            "SELECT count() AS count FROM lucking.shareholder_holding FINAL "
+            f"SELECT count() AS count FROM {clickhouse.database}.shareholder_holding FINAL "
             f"WHERE stock_code LIKE '%{_UNIQUE}%'"
         )
         assert rows[0]["count"] == 4  # 只有水位预置

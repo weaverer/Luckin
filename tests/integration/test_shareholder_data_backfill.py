@@ -19,7 +19,11 @@ from lucking.services.shareholder_data import (
     ShareholderDataSyncStatus,
 )
 from tests.contract.shareholder_data_memory import MemoryShareholderDataProvider
-from tests.integration.test_shareholder_data_sync import _build_service, _cleanup
+from tests.integration.test_shareholder_data_sync import (
+    _TEST_STOCK_IDS,
+    _build_service,
+    _cleanup,
+)
 
 _TARGET = date(2026, 7, 28)
 
@@ -47,8 +51,9 @@ def test_backfill_day_succeeds_and_idempotent(
         assert second.status is ShareholderDataSyncStatus.SUCCEEDED
         assert provider.call_counts["HOLDER_COUNT"] == calls_after_first
         rows = clickhouse.execute(
-            "SELECT count() AS count FROM lucking.shareholder_count FINAL "
-            f"WHERE end_date = '{_TARGET.replace(day=28).isoformat()}'"
+            f"SELECT count() AS count FROM {clickhouse.database}.shareholder_count FINAL "
+            f"WHERE end_date = '{_TARGET.replace(day=28).isoformat()}' "
+            f"AND stock_id IN {_TEST_STOCK_IDS}"
         )
         assert rows[0]["count"] == 4  # 无重复记录
     finally:

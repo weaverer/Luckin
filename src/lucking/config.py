@@ -1,6 +1,7 @@
 """Environment-backed application configuration."""
 
 from pathlib import Path
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import SecretStr, field_validator, model_validator
@@ -87,6 +88,18 @@ class Settings(BaseSettings):
     shareholder_data_rate_limiter: str = "redis"
     redis_url: str = "redis://127.0.0.1:6379/0"
     redis_password: SecretStr | None = None
+    app_environment: Literal["development", "test", "production"] = "development"
+    session_cookie_name: str = "lucking_session"
+    session_idle_timeout_seconds: int = 30 * 60
+    session_absolute_timeout_seconds: int = 8 * 60 * 60
+    session_cookie_secure: bool = False
+    session_cookie_samesite: Literal["lax", "strict"] = "lax"
+    session_cookie_path: str = "/"
+    csrf_header_name: str = "X-CSRF-Token"
+    workbench_timezone: str = "Asia/Shanghai"
+    daily_task_summary_hour: int = 20
+    feishu_webhook_url: SecretStr | None = None
+    feishu_signing_secret: SecretStr | None = None
     clickhouse_host: str = "127.0.0.1"
     clickhouse_port: int = 8123
     clickhouse_database: str = "lucking"
@@ -233,6 +246,37 @@ class Settings(BaseSettings):
             raise ValueError("REDIS_URL 必须是 redis:// URL")
         return value
 
+    @field_validator("workbench_timezone")
+    @classmethod
+    def validate_workbench_timezone(cls, value: str) -> str:
+        if value != "Asia/Shanghai":
+            raise ValueError("WORKBENCH_TIMEZONE 固定为 Asia/Shanghai")
+        return value
+
+    @field_validator("feishu_webhook_url")
+    @classmethod
+    def validate_feishu_webhook_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().startswith("https://"):
+            raise ValueError("FEISHU_WEBHOOK_URL 必须是 HTTPS URL")
+        return value
+
+    @field_validator(
+        "session_idle_timeout_seconds",
+        "session_absolute_timeout_seconds",
+    )
+    @classmethod
+    def validate_positive_session_timeout(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("会话超时必须大于 0")
+        return value
+
+    @field_validator("daily_task_summary_hour")
+    @classmethod
+    def validate_daily_task_summary_hour(cls, value: int) -> int:
+        if value != 20:
+            raise ValueError("DAILY_TASK_SUMMARY_HOUR 固定为 20")
+        return value
+
     @field_validator("clickhouse_port")
     @classmethod
     def validate_clickhouse_port(cls, value: int) -> int:
@@ -299,6 +343,14 @@ class Settings(BaseSettings):
             raise ValueError("SHAREHOLDER_DATA_RATE_LIMIT_PER_MINUTE 固定为 400（用户显式指定）")
         if self.shareholder_data_run_lease_seconds <= self.shareholder_data_fetch_deadline_seconds:
             raise ValueError("运行租约必须大于 Provider 截止时间")
+        return self
+
+    @model_validator(mode="after")
+    def validate_workbench_security(self) -> "Settings":
+        if self.session_absolute_timeout_seconds < self.session_idle_timeout_seconds:
+            raise ValueError("会话绝对有效期不得短于空闲有效期")
+        if self.app_environment == "production" and not self.session_cookie_secure:
+            raise ValueError("生产环境必须启用 Secure Cookie")
         return self
 
     def require_tushare_token(self) -> str:

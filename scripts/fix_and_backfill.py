@@ -14,7 +14,8 @@ client = build_clickhouse_client(settings)
 print("=== 清理测试残留 ===")
 for table in ("daily_quote", "adj_factor", "daily_basic", "weekly_kline", "monthly_kline"):
     rows = client.execute(
-        f"SELECT count() AS n FROM {settings.clickhouse_database}.{table} WHERE trade_date < '2024-01-01'"
+        f"SELECT count() AS n FROM {settings.clickhouse_database}.{table} "
+        "WHERE trade_date < '2024-01-01'"
     )
     n = rows[0]["n"]
     if n:

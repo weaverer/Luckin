@@ -1,26 +1,25 @@
 <!--
 同步影响报告
-- 版本变更：1.1.0 → 1.2.0
-- 修改的原则：无
-- 新增原则：
-  - VI. MySQL 表结构一致性与可审计例外
-- 新增章节：无（在“核心原则”中新增原则 VI）
+- 版本变更：1.3.0 → 1.3.1
+- 修改的原则：技术与文档约束（新增股价展示口径）
+- 新增原则：无
+- 新增章节：无（在“核心原则”中新增原则 VII）
 - 删除章节：无
 - 需要同步的模板：
-  - ✅ .specify/templates/plan-template.md
-  - ✅ .specify/templates/spec-template.md
-  - ✅ .specify/templates/tasks-template.md
+  - ✅ .specify/templates/plan-template.md（已校验；无需修改）
+  - ✅ .specify/templates/spec-template.md（已校验；无需修改）
+  - ✅ .specify/templates/tasks-template.md（已校验；无需修改）
 - 需要同步的 Spec Kit 命令：
   - ✅ .agents/skills/speckit-analyze/SKILL.md
   - ✅ .agents/skills/speckit-plan/SKILL.md
-  - ✅ .agents/skills/speckit-specify/SKILL.md
   - ✅ .agents/skills/speckit-tasks/SKILL.md
+  - ✅ .agents/skills/speckit-implement/SKILL.md
 - 运行指引：
   - ✅ README.md
-  - ✅ docs/frontend-technology-stack.md（已校验，与 MySQL 表结构无关，无需修改）
+  - ✅ docs/frontend-technology-stack.md
 - 已校验的其他 Spec Kit 命令：
-  - ✅ speckit-checklist、speckit-clarify、speckit-converge、speckit-implement、
-    speckit-taskstoissues 无过时引用，无需修改
+  - ✅ speckit-checklist、speckit-clarify、speckit-constitution、speckit-converge、
+    speckit-specify、speckit-taskstoissues 无过时引用，无需修改
 - 后续 TODO：无
 -->
 # Lucking 项目宪章
@@ -111,6 +110,26 @@ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 理由：统一的代理主键、数据库维护时间和中文元数据可降低跨功能建模差异，提高排障、
 数据治理和迁移审查效率；受控例外保留了复合身份、分区及框架内部表的合理设计空间。
 
+### VII. 统一公共 API 响应契约
+
+项目拥有的所有 JSON 公共 API，只要返回响应体，就必须使用以下顶层字段且不得增删或改名：
+`code`、`message`、`data`、`errors`、`request_id`、`timestamp`。成功响应必须满足
+`code = 0`、`message = ""`、`errors = []`，`data` 保存端点业务数据。失败响应必须保留正确的
+HTTP 4xx/5xx 状态，同时使用非零且稳定的整数业务码，令 `data = null`，在 `message` 中提供
+不含敏感信息的中文摘要，并以数组形式返回 `errors`；没有错误明细时也必须返回空数组。
+HTTP 状态码表示协议层结果，业务 `code` 表示应用结果，禁止以 HTTP 200 包装失败。
+
+分页响应的 `data` 必须统一为 `{items, pagination}`，其中 `pagination` 至少包含
+`limit`、`offset`、`total`、`has_more`，分页字段不得散落到顶层。`request_id` 必须贯穿请求、
+日志和响应；`timestamp` 必须遵循本宪章的 UTC ISO 8601 时间规则。`errors` 中的字段级或
+可操作明细必须使用稳定结构，不得包含堆栈、SQL、凭据、秘密或第三方原始响应。
+HTTP 204 保持无响应体；二进制或流式非 JSON 接口不适用 JSON 信封，但必须在 OpenAPI 和计划中
+显式声明媒体类型与不适用理由。FastAPI/OpenAPI 必须定义可生成强类型客户端的具体响应模型，
+不得以无约束字典或前端 `any` 代替契约。
+
+理由：统一响应结构可让前端、监控、日志和契约测试稳定地区分协议错误与业务错误，消除分页、
+错误和请求追踪字段在不同端点间漂移，并降低客户端重复适配成本。
+
 ## 技术与文档约束
 
 - 后端使用 Python 3.12、FastAPI、SQLAlchemy/Alembic，并以 OpenAPI 描述公共 API。
@@ -122,6 +141,8 @@ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 - 项目治理、规格、计划、任务、评审说明及面向项目成员的运行文档必须使用简体中文。
   代码标识符、命令、协议字段、第三方专有名词及外部标准要求的内容可以保留英文。
 - 时间和跨系统时间字段必须使用 ISO 8601；服务端时间默认使用 UTC，展示层负责时区转换。
+- 页面展示股票日线股价时必须使用后复权价格；后复权应基于与日线按股票和交易日关联的累计复权因子计算或使用来源提供的后复权字段。成交量、成交额保持原始行情口径，不得按价格复权比例换算；页面文案、图例和接口字段说明必须明确该展示口径。
+- 公共 JSON API 必须遵循原则 VII 的统一响应结构；具体 DTO、业务码和错误明细必须由 OpenAPI 定义。
 
 ## 开发工作流与评审门禁
 
@@ -129,13 +150,15 @@ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 2. 在 `/speckit-plan` 中记录技术上下文、边界、数据所有权、风险、质量策略和宪章检查；
    涉及第三方数据时还必须记录项目接口、规范化模型、适配器、供应商选择方式和迁移策略；
    涉及 MySQL 表时还必须逐表证明主键、时间字段和中文注释符合原则 VI，或记录获批例外；
+   涉及公共 API 时还必须定义原则 VII 的统一响应模型、HTTP 状态与业务码映射及契约测试；
    研究前及设计后各执行一次宪章检查。
 3. 使用 `/speckit-tasks` 生成可追溯、依赖有序的任务；每个用户故事都必须包含先于实现的
    必要测试任务；第三方数据集成必须包含端口、适配器、契约测试和替代实现或测试替身任务，
-   并包含安全、可观测性、文档和质量门禁任务。
+   公共 API 必须包含统一响应模型、状态码映射和 OpenAPI 契约测试任务，并包含安全、
+   可观测性、文档和质量门禁任务。
 4. 实现必须按任务依赖推进，完成项及时标记；不得在未更新规格和计划的情况下扩大范围。
-5. 合并前评审必须确认需求追溯、架构边界、测试证据、安全影响、可观测性和文档均符合
-   本宪章。任何例外必须在计划的复杂度跟踪中记录理由、替代方案和偿还条件。
+5. 合并前评审必须确认需求追溯、架构边界、API 响应契约、测试证据、安全影响、可观测性
+   和文档均符合本宪章。任何例外必须在计划的复杂度跟踪中记录理由、替代方案和偿还条件。
 
 ## 治理
 
@@ -152,4 +175,4 @@ updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 无法合规时必须停止进入下一阶段，或在获得明确批准后记录限时例外及整改任务。维护者
 至少在每次发布前复核宪章、模板和运行文档的一致性。
 
-**版本**：1.2.0 | **批准日期**：2026-07-25 | **最后修订**：2026-07-28
+**版本**：1.3.0 | **批准日期**：2026-07-25 | **最后修订**：2026-08-08

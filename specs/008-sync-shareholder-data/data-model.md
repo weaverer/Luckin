@@ -1,9 +1,11 @@
 # 数据模型：股东数据交易日同步（008-sync-shareholder-data）
 
 > `/speckit-plan` Phase 1 输出。依据：spec.md、research.md、项目宪章 1.2.0。
-> 本功能**不新建任何 MySQL 表、无结构性 DDL 变更**：股票身份复用 003，
-> 同步审计复用 005；唯一新增存储为 ClickHouse `shareholder_holding` 与
+> 本功能**不新建任何 MySQL 表**：股票身份复用 003，同步审计复用 005；
+> 唯一新增存储为 ClickHouse `shareholder_holding` 与
 > `shareholder_count` 两张业务表（research 决策 2）。
+> **结构性变更一项**（迁移 006，2026-08-06 应用）：`market_data_sync_run.data_kind`
+> String(16)→32，例外登记见 §2.3。
 
 ## 1. 概览与数据归属
 
@@ -18,7 +20,7 @@
 ClickHouse；股票身份与审计均复用既有表（research 决策 3），本功能不
 拥有新的 MySQL 数据。
 
-## 2. MySQL 表（全部复用，无 DDL 变更）
+## 2. MySQL 表（全部复用；审计表一项结构性变更见 §2.3）
 
 ### 2.1 股票身份（003 复用）
 
@@ -35,9 +37,10 @@ ClickHouse；股票身份与审计均复用既有表（research 决策 3），�
 
 ### 2.2 同步审计（005 复用）
 
-`market_data_sync_run/attempt/issue` 三表原样复用，新增
+`market_data_sync_run/attempt/issue` 三表复用，新增
 `DataKind.TOP10_HOLDERS / TOP10_FLOAT_HOLDERS / HOLDER_COUNT`
-三个取值（纯代码枚举扩展，无列变更；与 005 每接口一 `data_kind`
+三个取值（`DataKind` 纯枚举扩展；`market_data_sync_run.data_kind`
+列宽经迁移 006 加宽，见 §2.3——与 005 每接口一 `data_kind`
 的模式一致——`DAILY_QUOTE`/`ADJ_FACTOR`/`DAILY_BASIC`/
 `WEEKLY_KLINE`/`MONTHLY_KLINE`）：
 
@@ -57,13 +60,21 @@ ClickHouse；股票身份与审计均复用既有表（research 决策 3），�
   （含 `UNKNOWN_STOCK_IDENTITY`，无需新增类别）；脱敏摘要
   （哈希 + 白名单），禁止 Token/连接串/原始行。
 
-### 2.3 宪章 VI 结论
+### 2.3 宪章 VI 结论与例外登记
 
-本功能不新建、不结构性修改任何项目拥有的 MySQL 业务表，因此宪章 VI
-"逐表治理"要求在本功能**不适用**（无新建/无结构变更）；复用表的结构
-治理义务仍归属其创建功能（003/005）。ClickHouse 两张表属于宪章 II
-明确划分的分析型数据存储，且属宪章允许的"外部引擎承载业务数据"情形——
-引擎、排序键、分区与幂等语义记录于 §3/§4。
+本功能不新建任何 MySQL 业务表（身份/审计全复用）；ClickHouse 两张表
+属于宪章 II 明确划分的分析型数据存储，属宪章允许的"外部引擎承载业务
+数据"情形，引擎、排序键、分区与幂等语义记录于 §3/§4。
+
+**结构性变更一项（例外，2026-08-06 上线实测发现并应用迁移 006）**：
+
+| 例外字段 | 表 | 变更 | 业务理由 | 唯一性保障 | 迁移影响 |
+|---------|----|------|---------|-----------|---------|
+| `data_kind` | `market_data_sync_run`（005 审计表，本功能复用） | 迁移 006：`String(16)` → `String(32)` | `TOP10_FLOAT_HOLDERS`（18 字符）超出原 16 字符列宽，增量 run 认领 INSERT 报 `DataError (1406) Data too long` | 不变：`run_key` UNIQUE 与 `run_id` 唯一键均未触及，加宽只增大容量 | 只增不缩，005 既有数据不受影响；`utf8mb4_bin` 排序规则保持；ORM 模型（`models/market_data.py`）与迁移一致 |
+
+被拒绝的默认方案：新建本功能独立审计表（重复审计体系，违反宪章 II
+边界）；缩短枚举取值（破坏 `run_key`/`scope_fingerprint` 与既有数据
+一致性，且不可逆）。创建/更新时间字段语义由 005 功能保持。
 
 ## 3. ClickHouse 业务表
 
@@ -177,4 +188,4 @@ ORDER BY (end_date, stock_id)
 | 单 block 发布 + 失败不破坏已有数据 | FR-009、FR-013、NFR-003 |
 | 审计三表复用（`data_kind=TOP10_HOLDERS`/`TOP10_FLOAT_HOLDERS`/`HOLDER_COUNT`，每接口独立 run） | FR-011、FR-012、NFR-005、SC-009 |
 | 按月分区、无 TTL | NFR-009 |
-| 无新 MySQL 表（宪章 VI 不适用） | 宪章 VI、宪章 II |
+| 无新 MySQL 表；审计表一项结构性变更（迁移 006，data_kind 加宽）已按宪章 VI 登记（§2.3） | 宪章 VI、宪章 II |

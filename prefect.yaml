@@ -2,6 +2,23 @@ name: lucking
 prefect-version: "3"
 
 deployments:
+  - name: 每日任务汇总通知
+    entrypoint: src/lucking/flows/daily_task_summary.py:daily_task_summary
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool: {name: local-pool, work_queue_name: default}
+    schedules:
+      - cron: "0 20 * * *"
+        timezone: Asia/Shanghai
+        slug: daily-task-summary
+        active: true
+  - name: 每日任务汇总补发
+    entrypoint: src/lucking/flows/daily_task_summary.py:resend_daily_task_summary
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    work_pool: {name: local-pool, work_queue_name: default}
   - name: 交易日历同步
     version: "1"
     tags: [trading-calendar]
@@ -45,7 +62,7 @@ deployments:
       work_queue_name: default
       job_variables: {}
     schedules:
-      - cron: "0 9 * * *"
+      - cron: "30 9 * * *"
         timezone: Asia/Shanghai
         slug: daily-stock-list
         active: true
@@ -99,6 +116,7 @@ deployments:
       work_queue_name: default
       job_variables: {}
 
+
   - name: 复权因子同步
     version: "1"
     tags: [market-data]
@@ -112,7 +130,7 @@ deployments:
       work_queue_name: default
       job_variables: {}
     schedules:
-      - cron: "30 9 * * 1-5"
+      - cron: "31 9 * * 1-5"
         timezone: Asia/Shanghai
         slug: adj-factor-sync
         active: true

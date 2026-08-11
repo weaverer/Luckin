@@ -1,0 +1,202 @@
+openapi: 3.1.0
+info:
+  title: Lucking J金股研究驾驶舱 API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /j-gold/research:
+    get:
+      operationId: getJGoldResearch
+      summary: 获取 J金股驾驶舱聚合结果
+      parameters:
+        - {name: recommendation_month, in: query, required: true, schema: {type: string, format: date}}
+        - {name: broker_name, in: query, schema: {type: string, maxLength: 160}}
+        - {name: industry, in: query, schema: {type: string, maxLength: 160}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200': {description: 驾驶舱聚合结果, content: {application/json: {schema: {$ref: '#/components/schemas/ResearchResponse'}}}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /j-gold/stocks/{stock_id}:
+    get:
+      operationId: getJGoldStockResearch
+      summary: 获取可追溯股票研究详情
+      parameters:
+        - {name: stock_id, in: path, required: true, schema: {type: string}}
+        - {name: recommendation_month, in: query, required: true, schema: {type: string, format: date}}
+      responses:
+        '200': {description: 股票研究详情, content: {application/json: {schema: {$ref: '#/components/schemas/StockResearchResponse'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /watchlists/{group_id}/members:
+    post:
+      operationId: addJGoldStockToWatchlist
+      summary: 将 J金股加入自选组合
+      parameters:
+        - {name: group_id, in: path, required: true, schema: {type: string}}
+        - {name: X-CSRF-Token, in: header, required: true, schema: {type: string}}
+      responses:
+        '201': {description: 加入成功, content: {application/json: {schema: {$ref: '#/components/schemas/ApiResponse'}}}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      required: [code, message, data, errors, request_id, timestamp]
+      properties:
+        code: {type: integer}
+        message: {type: string}
+        data: {type: object, nullable: true}
+        errors: {type: array, items: {type: object}}
+        request_id: {type: string}
+        timestamp: {type: string, format: date-time}
+    ResearchResponse:
+      allOf:
+        - {$ref: '#/components/schemas/ApiResponse'}
+        - type: object
+          properties:
+            data: {$ref: '#/components/schemas/ResearchData'}
+    StockResearchResponse:
+      allOf:
+        - {$ref: '#/components/schemas/ApiResponse'}
+        - type: object
+          properties:
+            data: {$ref: '#/components/schemas/StockResearchData'}
+    ResearchData:
+      type: object
+      required: [metrics, items, pagination, signals, industries, broker_ability, diffusion, quality]
+      properties:
+        metrics: {$ref: '#/components/schemas/OverviewMetrics'}
+        items: {type: array, items: {$ref: '#/components/schemas/RadarItem'}}
+        pagination: {$ref: '#/components/schemas/Pagination'}
+        signals: {type: array, items: {$ref: '#/components/schemas/ResearchSignal'}}
+        industries: {type: array, items: {$ref: '#/components/schemas/IndustryConsensus'}}
+        broker_ability: {type: array, items: {$ref: '#/components/schemas/BrokerAbility'}}
+        diffusion: {type: array, items: {$ref: '#/components/schemas/DiffusionPoint'}}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+    StockResearchData:
+      type: object
+      required: [stock, recommendations, history, quality]
+      properties:
+        stock: {$ref: '#/components/schemas/StockIdentity'}
+        recommendations: {type: array, items: {$ref: '#/components/schemas/RecommendationFact'}}
+        history: {type: array, items: {$ref: '#/components/schemas/HistoryPoint'}}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+    OverviewMetrics:
+      type: object
+      required: [monthly_count, new_count, consensus_count, warming_count, breakout_count, average_excess_20d]
+      properties:
+        monthly_count: {type: integer}
+        new_count: {type: integer}
+        consensus_count: {type: integer}
+        warming_count: {type: integer}
+        breakout_count: {type: integer}
+        average_excess_20d: {type: number, nullable: true}
+    RadarItem:
+      type: object
+      required: [stock, industry, broker_count, month_delta, consecutive_months, excess_20d, status, score, quality]
+      properties:
+        stock: {$ref: '#/components/schemas/StockIdentity'}
+        industry: {type: string, nullable: true}
+        broker_count: {type: integer}
+        month_delta: {type: integer, nullable: true}
+        consecutive_months: {type: integer}
+        excess_20d: {type: number, nullable: true}
+        status: {type: string, enum: [突破, 趋势强, 新晋, 高共识, 持续, 降温, 数据不足]}
+        score: {type: number, nullable: true}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+    ResearchSignal:
+      type: object
+      required: [object_name, type, summary, comparison_period, trigger_rule, data_time, quality]
+      properties:
+        object_name: {type: string}
+        type: {type: string}
+        summary: {type: string}
+        comparison_period: {type: string}
+        trigger_rule: {type: string}
+        data_time: {type: string, format: date-time}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+    IndustryConsensus:
+      type: object
+      required: [industry, recommendation_records, stock_count, broker_count, month_delta, quality]
+      properties:
+        industry: {type: string}
+        recommendation_records: {type: integer}
+        stock_count: {type: integer}
+        broker_count: {type: integer}
+        month_delta: {type: integer, nullable: true}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+    BrokerAbility:
+      type: object
+      required: [broker_name, sample_count, average_excess_20d, positive_ratio, coverage, minimum_sample_count, grade, quality]
+      properties:
+        broker_name: {type: string}
+        sample_count: {type: integer}
+        average_excess_20d: {type: number, nullable: true}
+        positive_ratio: {type: number, nullable: true}
+        coverage: {type: number, nullable: true}
+        minimum_sample_count: {type: integer, const: 20}
+        grade: {type: string, nullable: true}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+    DiffusionPoint:
+      type: object
+      required: [month, stock_count, month_delta, quality]
+      properties:
+        month: {type: string, format: date}
+        stock_count: {type: integer}
+        month_delta: {type: integer, nullable: true}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+    QualityStatus:
+      type: object
+      required: [status, explanation, source, generated_at]
+      properties:
+        status: {type: string, enum: [ready, loading, empty, delayed, insufficient, partial, error]}
+        explanation: {type: string}
+        source: {type: string}
+        generated_at: {type: string, format: date-time}
+    Pagination:
+      type: object
+      required: [limit, offset, total, has_more]
+      properties:
+        limit: {type: integer}
+        offset: {type: integer}
+        total: {type: integer}
+        has_more: {type: boolean}
+    StockIdentity:
+      type: object
+      required: [stock_id, security_code, name, market_code, listing_status]
+      properties:
+        stock_id: {type: string}
+        security_code: {type: string}
+        name: {type: string}
+        market_code: {type: string}
+        listing_status: {type: string}
+    RecommendationFact:
+      type: object
+      required: [recommendation_month, broker_name, source, data_time]
+      properties:
+        recommendation_month: {type: string, format: date}
+        broker_name: {type: string}
+        source: {type: string}
+        data_time: {type: string, format: date-time}
+    HistoryPoint:
+      type: object
+      required: [month, broker_count, quality]
+      properties:
+        month: {type: string, format: date}
+        broker_count: {type: integer}
+        quality: {$ref: '#/components/schemas/QualityStatus'}
+  responses:
+    BadRequest: {description: 请求参数错误}
+    Unauthorized: {description: 未登录}
+    Forbidden: {description: 无权操作}
+    NotFound: {description: 资源不存在}
+    InternalServerError: {description: 服务错误}
+  securitySchemes:
+    sessionCookie: {type: apiKey, in: cookie, name: session}

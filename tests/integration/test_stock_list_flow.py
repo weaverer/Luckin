@@ -15,7 +15,7 @@ def test_prefect_yaml_has_daily_stock_list_deployment_without_venue_params() -> 
         for item in config["deployments"]
         if item["entrypoint"] == "src/lucking/flows/stock_list.py:sync_stock_list"
     )
-    assert deployment["name"] == "default"
+    assert deployment["name"] == "股票列表同步"
     assert deployment["entrypoint"] == "src/lucking/flows/stock_list.py:sync_stock_list"
     schedule = deployment["schedules"][0]
     assert schedule["cron"] == "0 9 * * *"

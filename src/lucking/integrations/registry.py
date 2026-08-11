@@ -167,9 +167,7 @@ DAILY_QUOTE_PROVIDERS: dict[str, DailyQuoteProviderFactory] = {}
 ADJ_FACTOR_PROVIDERS: dict[str, AdjFactorProviderFactory] = {}
 
 
-def register_daily_quote_provider(
-    provider_code: str, factory: DailyQuoteProviderFactory
-) -> None:
+def register_daily_quote_provider(provider_code: str, factory: DailyQuoteProviderFactory) -> None:
     normalized = provider_code.strip().lower()
     if not normalized:
         raise ValueError("Provider code 不能为空")
@@ -208,9 +206,7 @@ def build_tushare_daily_quote_provider(settings: Settings) -> DailyQuoteProvider
     )
 
 
-def register_adj_factor_provider(
-    provider_code: str, factory: AdjFactorProviderFactory
-) -> None:
+def register_adj_factor_provider(provider_code: str, factory: AdjFactorProviderFactory) -> None:
     normalized = provider_code.strip().lower()
     if not normalized:
         raise ValueError("Provider code 不能为空")
@@ -257,9 +253,7 @@ DAILY_BASIC_PROVIDERS: dict[str, DailyBasicProviderFactory] = {}
 KLINE_PROVIDERS: dict[str, KlineProviderFactory] = {}
 
 
-def register_daily_basic_provider(
-    provider_code: str, factory: DailyBasicProviderFactory
-) -> None:
+def register_daily_basic_provider(provider_code: str, factory: DailyBasicProviderFactory) -> None:
     normalized = provider_code.strip().lower()
     if not normalized:
         raise ValueError("Provider code 不能为空")
@@ -346,18 +340,14 @@ register_kline_provider("tushare", build_tushare_kline_provider)
 INDEX_FACTOR_PROVIDERS: dict[str, IndexFactorProviderFactory] = {}
 
 
-def register_index_factor_provider(
-    provider_code: str, factory: IndexFactorProviderFactory
-) -> None:
+def register_index_factor_provider(provider_code: str, factory: IndexFactorProviderFactory) -> None:
     normalized = provider_code.strip().lower()
     if not normalized:
         raise ValueError("Provider code 不能为空")
     INDEX_FACTOR_PROVIDERS[normalized] = factory
 
 
-def build_index_factor_provider(
-    provider_code: str, settings: Settings
-) -> IndexFactorProvider:
+def build_index_factor_provider(provider_code: str, settings: Settings) -> IndexFactorProvider:
     normalized = provider_code.strip().lower()
     try:
         factory = INDEX_FACTOR_PROVIDERS[normalized]
@@ -396,18 +386,14 @@ register_index_factor_provider("tushare", build_tushare_index_factor_provider)
 STOCK_FACTOR_PROVIDERS: dict[str, StockFactorProviderFactory] = {}
 
 
-def register_stock_factor_provider(
-    provider_code: str, factory: StockFactorProviderFactory
-) -> None:
+def register_stock_factor_provider(provider_code: str, factory: StockFactorProviderFactory) -> None:
     normalized = provider_code.strip().lower()
     if not normalized:
         raise ValueError("Provider code 不能为空")
     STOCK_FACTOR_PROVIDERS[normalized] = factory
 
 
-def build_stock_factor_provider(
-    provider_code: str, settings: Settings
-) -> StockFactorProvider:
+def build_stock_factor_provider(provider_code: str, settings: Settings) -> StockFactorProvider:
     normalized = provider_code.strip().lower()
     try:
         factory = STOCK_FACTOR_PROVIDERS[normalized]

@@ -35,17 +35,21 @@ from lucking.services.stock_factor import (
 from tests.contract.stock_factor_memory import MemoryStockFactorProvider, make_record
 
 # 2024 年 1 月全部交易日（周末关闭）
-_OPEN_DAYS = tuple(
-    date(2024, 1, day)
-    for day in range(1, 32)
-    if date(2024, 1, day).weekday() < 5
-)
+_OPEN_DAYS = tuple(date(2024, 1, day) for day in range(1, 32) if date(2024, 1, day).weekday() < 5)
 _STOCKS = (
     ("600000.SH", "XSHG", "600000"),
     ("000001.SZ", "XSHE", "000001"),
     ("300750.SZ", "XSHE", "300750"),
     ("830799.BJ", "XBSE", "830799"),
 )
+_RUN_PREFIX = f"sf-{uuid4().hex[:8]}"
+
+
+def _stock_id(code: str) -> str:
+    return f"{_RUN_PREFIX}-{code}"
+
+
+_TEST_STOCK_IDS = "(" + ", ".join(f"'{_stock_id(code)}'" for _, _, code in _STOCKS) + ")"
 
 
 def _unique_target() -> date:
@@ -101,7 +105,7 @@ def _seed_factory() -> sessionmaker[Session]:
                 )
             )
         for provider_id, venue, code in _STOCKS:
-            stock_id = f"stock-{code}"
+            stock_id = _stock_id(code)
             session.add(
                 StockCurrent(
                     stock_id=stock_id,
@@ -132,9 +136,7 @@ def _seed_factory() -> sessionmaker[Session]:
     return factory
 
 
-def _build_service(
-    factory: sessionmaker[Session], client: ClickHouseClient
-) -> StockFactorService:
+def _build_service(factory: sessionmaker[Session], client: ClickHouseClient) -> StockFactorService:
     return StockFactorService(
         MemoryStockFactorProvider(),
         SqlAlchemyMarketDataRepository(factory),
@@ -154,7 +156,7 @@ def _scheduled(target: date) -> ScheduledStockFactorSyncCommand:
 def _cleanup(client: ClickHouseClient, target: date) -> None:
     client.execute_ddl(
         f"ALTER TABLE {client.database}.stock_factor DELETE "
-        f"WHERE trade_date = '{target.isoformat()}' SETTINGS mutations_sync = 1"
+        f"WHERE stock_id IN {_TEST_STOCK_IDS} SETTINGS mutations_sync = 1"
     )
 
 
@@ -169,7 +171,7 @@ def test_publish_counts_and_idempotent_claim(
         assert first.added_count == 4
         rows = client.execute(
             f"SELECT stock_id FROM {client.database}.stock_factor FINAL "
-            f"WHERE trade_date = '{target.isoformat()}'"
+            f"WHERE trade_date = '{target.isoformat()}' AND stock_id IN {_TEST_STOCK_IDS}"
         )
         assert len(rows) == 4
         second = service.sync(_scheduled(target))  # 同 run_key（同 slug+时点）
@@ -225,7 +227,7 @@ def test_revision_update_vs_stable_conflict(
         assert second.updated_count == 1  # 复权修订按最新值更新，不视为冲突
         rows = client.execute(
             f"SELECT close_qfq FROM {client.database}.stock_factor FINAL "
-            f"WHERE trade_date = '{target.isoformat()}'"
+            f"WHERE trade_date = '{target.isoformat()}' AND stock_id IN {_TEST_STOCK_IDS}"
         )
         assert str(rows[0]["close_qfq"]).rstrip("0").rstrip(".") == "10.99"
 
@@ -240,7 +242,7 @@ def test_revision_update_vs_stable_conflict(
         assert excinfo.value.category == "RECORD_CONFLICT"
         rows = client.execute(
             f"SELECT pe_ttm FROM {client.database}.stock_factor FINAL "
-            f"WHERE trade_date = '{target.isoformat()}'"
+            f"WHERE trade_date = '{target.isoformat()}' AND stock_id IN {_TEST_STOCK_IDS}"
         )
         assert rows[0]["pe_ttm"] is not None  # 既有有效数据未被破坏
         assert str(rows[0]["pe_ttm"]) != "99.00"
@@ -269,7 +271,7 @@ def test_clickhouse_unreachable_keeps_run_failed_and_data_intact(
             service.sync(_scheduled(target))
         rows = client.execute(
             f"SELECT count() AS count FROM {client.database}.stock_factor FINAL "
-            f"WHERE trade_date = '{target.isoformat()}'"
+            f"WHERE trade_date = '{target.isoformat()}' AND stock_id IN {_TEST_STOCK_IDS}"
         )
         assert int(rows[0]["count"]) == 0  # 失败不写入任何数据
     finally:

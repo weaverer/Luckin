@@ -24,6 +24,11 @@ contract/integration tests for interface changes and focused end-to-end tests fo
 `created_at/updated_at`、业务唯一约束，以及每张表和每个字段的中文注释。获批例外必须
 按 plan/data-model 中逐表记录的例外设计生成实现与验证任务。
 
+**统一公共 API 响应**：如功能新增或修改公共 JSON API，任务必须覆盖统一响应模型、
+HTTP 状态与业务 `code` 映射、分页 `data={items,pagination}`、请求追踪、UTC ISO 8601
+时间戳和 OpenAPI 契约测试。成功必须使用 `code=0`；失败必须保留 4xx/5xx 状态并使用
+非零稳定业务码。
+
 **组织方式**：按用户故事分组，使每个故事都能独立实现和测试。
 
 ## 格式：`[ID] [P?] [Story] 描述`
@@ -80,6 +85,8 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Validate MySQL primary keys, timestamps, unique constraints, and Chinese table/column comments in tests/integration/test_database_schema.py
 - [ ] T005 [P] Implement authentication/authorization framework
 - [ ] T006 [P] Setup API routing and middleware structure
+- [ ] TXXX Define typed unified API response models and HTTP/business-code mapping in src/[location]/api/responses.py
+- [ ] TXXX [P] Add OpenAPI contract tests for success, error, pagination, request_id, and timestamp responses in tests/contract/test_api_response.py
 - [ ] T007 Create base models/entities that all stories depend on
 - [ ] T008 Configure error handling and logging infrastructure
 - [ ] T009 Setup environment configuration management
@@ -175,6 +182,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Add or verify structured logging, metrics, and health checks
 - [ ] TXXX Verify third-party data contract tests with a replacement adapter or test double
 - [ ] TXXX Verify MySQL migrations and live schema match the approved default or documented exceptions
+- [ ] TXXX Verify every public JSON API uses the unified typed response and no failure is wrapped in HTTP 200
 - [ ] TXXX Run applicable lint, typecheck, test, and build quality gates
 - [ ] TXXX Run quickstart.md validation
 

@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from lucking.clickhouse import build_clickhouse_client, ClickHousePersistenceError
+from lucking.clickhouse import build_clickhouse_client
 from lucking.config import Settings
 
 _WRONG = ("ma_bfq_mass", "ma_hfq_mass", "ma_qfq_mass")
@@ -40,14 +40,12 @@ def main() -> None:
     for name, comment in _RIGHT:
         if name not in existing:
             client.execute_ddl(
-                f"ALTER TABLE {table} ADD COLUMN {name} Nullable(Decimal(12,4)) "
-                f"COMMENT '{comment}'"
+                f"ALTER TABLE {table} ADD COLUMN {name} Nullable(Decimal(12,4)) COMMENT '{comment}'"
             )
             print(f"added {name}")
     for name, comment in _WIDE_TYPES.items():
         client.execute_ddl(
-            f"ALTER TABLE {table} MODIFY COLUMN {name} Nullable(Decimal(24,4)) "
-            f"COMMENT '{comment}'"
+            f"ALTER TABLE {table} MODIFY COLUMN {name} Nullable(Decimal(24,4)) COMMENT '{comment}'"
         )
         print(f"modified {name} -> Decimal(24,4)")
     columns = {column.name for column in client.describe_table(table)}

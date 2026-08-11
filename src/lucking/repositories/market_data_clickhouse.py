@@ -118,18 +118,25 @@ class MarketDataClickHouseRepository:
         data_kind: DataKind,
         *,
         trade_date: date | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         stock_id: str | None = None,
         venue_code: str | None = None,
         security_code: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        descending: bool = False,
     ) -> tuple[Mapping[str, Any], ...]:
-        if not 1 <= limit <= 1000 or offset < 0:
+        if not 1 <= limit <= 400 or offset < 0:
             raise ValueError("分页参数非法")
         table = TABLE_BY_KIND[data_kind]
         clauses: list[str] = []
         if trade_date is not None:
             clauses.append(f"trade_date = '{trade_date.isoformat()}'")
+        if start_date is not None:
+            clauses.append(f"trade_date >= '{start_date.isoformat()}'")
+        if end_date is not None:
+            clauses.append(f"trade_date <= '{end_date.isoformat()}'")
         if stock_id is not None:
             clauses.append(f"stock_id = '{stock_id}'")
         if venue_code is not None:
@@ -137,9 +144,10 @@ class MarketDataClickHouseRepository:
         if security_code is not None:
             clauses.append(f"security_code = '{security_code}'")
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        direction = " DESC" if descending else ""
         rows = self._client.execute(
             f"SELECT * FROM {self._client.database}.{table} FINAL{where} "
-            f"ORDER BY trade_date, stock_id LIMIT {limit} OFFSET {offset}"
+            f"ORDER BY trade_date{direction}, stock_id LIMIT {limit} OFFSET {offset}"
         )
         return tuple(_clean_row(row) for row in rows)
 
@@ -150,6 +158,70 @@ class MarketDataClickHouseRepository:
             f"WHERE trade_date = '{trade_date.isoformat()}'"
         )
         return int(rows[0]["count"])
+
+    def query_daily_quotes_post_adjusted(
+        self,
+        *,
+        stock_id: str,
+        limit: int = 120,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        descending: bool = False,
+    ) -> tuple[Mapping[str, Any], ...]:
+        """查询后复权价格，成交量/成交额仍保持来源口径。
+
+        复权在 ClickHouse 查询侧完成，避免将全历史行情和复权因子加载到应用内存。
+        后复权基准取该股票最早有效复权因子；因子按交易日关联，支持除权后的历史回溯。
+        """
+        if not 1 <= limit <= 400:
+            raise ValueError("查询条数必须为 1 至 400")
+        clauses = [f"q.stock_id = '{stock_id}'"]
+        if start_date is not None:
+            clauses.append(f"q.trade_date >= '{start_date.isoformat()}'")
+        if end_date is not None:
+            clauses.append(f"q.trade_date <= '{end_date.isoformat()}'")
+        direction = "DESC" if descending else "ASC"
+        where = " AND ".join(clauses)
+        rows = self._client.execute(
+            f"""
+            WITH first_factor AS (
+                SELECT argMinIf(adj_factor, trade_date, adj_factor > 0) AS factor_first
+                FROM {self._client.database}.adj_factor FINAL
+                WHERE stock_id = '{stock_id}'
+            )
+            SELECT
+                q.trade_date AS trade_date,
+                q.stock_id AS stock_id,
+                q.venue_code AS venue_code,
+                q.security_code AS security_code,
+                q.open * f.adj_factor / ff.factor_first AS open,
+                q.high * f.adj_factor / ff.factor_first AS high,
+                q.low * f.adj_factor / ff.factor_first AS low,
+                q.close * f.adj_factor / ff.factor_first AS close,
+                q.pre_close * f.adj_factor / ff.factor_first AS pre_close,
+                q.change AS change,
+                q.pct_chg AS pct_chg,
+                q.vol AS vol,
+                q.amount AS amount,
+                q.updated_at AS updated_at
+            FROM (
+                SELECT *
+                FROM {self._client.database}.daily_quote FINAL
+                WHERE stock_id = '{stock_id}'
+            ) AS q
+            INNER JOIN (
+                SELECT stock_id, trade_date, adj_factor
+                FROM {self._client.database}.adj_factor FINAL
+                WHERE stock_id = '{stock_id}'
+            ) AS f
+                ON q.stock_id = f.stock_id AND q.trade_date = f.trade_date
+            CROSS JOIN first_factor AS ff
+            WHERE {where} AND f.adj_factor > 0 AND ff.factor_first > 0
+            ORDER BY q.trade_date {direction}
+            LIMIT {limit}
+            """
+        )
+        return tuple(_clean_row(row) for row in rows)
 
     def _existing_digests(
         self, table: str, trade_date: date, columns: tuple[str, ...]
@@ -202,7 +274,7 @@ def _record_row(record: Any, updated_at: datetime) -> dict[str, Any]:
         "turnover_rate_f",
         "volume_ratio",
         "limit_status",
-                                        "end_date",
+        "end_date",
     ):
         if hasattr(record, field):
             values[field] = getattr(record, field)
@@ -222,8 +294,7 @@ def _clean_stock_id(value: Any) -> str:
 
 def _clean_row(row: Mapping[str, Any]) -> Mapping[str, Any]:
     return {
-        key: (_clean_stock_id(value) if key == "stock_id" else value)
-        for key, value in row.items()
+        key: (_clean_stock_id(value) if key == "stock_id" else value) for key, value in row.items()
     }
 
 

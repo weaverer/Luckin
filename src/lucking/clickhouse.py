@@ -99,9 +99,7 @@ class ClickHouseClient:
         return len(rows)
 
     def describe_table(self, table: str) -> tuple[ClickHouseColumnInfo, ...]:
-        rows = self.execute(
-            f"DESCRIBE TABLE {self._database}.{table}"
-        )
+        rows = self.execute(f"DESCRIBE TABLE {self._database}.{table}")
         return tuple(
             ClickHouseColumnInfo(
                 str(row.get("name", "")),
@@ -154,7 +152,11 @@ class ClickHouseClient:
         数据仍在请求体。
         """
         try:
-            with httpx.Client(transport=self._transport, timeout=self._timeout) as client:
+            # ClickHouse is an internal database endpoint. Environment HTTP
+            # proxies must never intercept localhost/private persistence calls.
+            with httpx.Client(
+                transport=self._transport, timeout=self._timeout, trust_env=False
+            ) as client:
                 response = client.post(
                     self._url,
                     headers=self._headers,
@@ -165,9 +167,7 @@ class ClickHouseClient:
             raise ClickHousePersistenceError("ClickHouse 网络连接或超时错误") from exc
         if response.status_code != 200:
             summary = " ".join(response.text.split())[:200] or "ClickHouse 拒绝请求"
-            raise ClickHousePersistenceError(
-                summary, status_code=response.status_code
-            )
+            raise ClickHousePersistenceError(summary, status_code=response.status_code)
         return response.text
 
 
@@ -503,21 +503,13 @@ _INDICATOR_BASE_COMMENTS = {
 }
 # 周期型指标（ma/ema/expma/rsi）由基名携带周期，注释直接使用基名。
 _INDICATOR_BASE_COMMENTS.update(
-    {
-        f"ma_{n}": f"简单移动平均（{n} 日）" for n in (5, 10, 20, 30, 60, 90, 250)
-    }
+    {f"ma_{n}": f"简单移动平均（{n} 日）" for n in (5, 10, 20, 30, 60, 90, 250)}
 )
 _INDICATOR_BASE_COMMENTS.update(
-    {
-        f"ema_{n}": f"指数移动平均（{n} 日）" for n in (5, 10, 20, 30, 60, 90, 250)
-    }
+    {f"ema_{n}": f"指数移动平均（{n} 日）" for n in (5, 10, 20, 30, 60, 90, 250)}
 )
-_INDICATOR_BASE_COMMENTS.update(
-    {f"expma_{n}": f"指数平均数（{n} 日）" for n in (12, 50)}
-)
-_INDICATOR_BASE_COMMENTS.update(
-    {f"rsi_{n}": f"相对强弱指标 RSI（{n} 日）" for n in (6, 12, 24)}
-)
+_INDICATOR_BASE_COMMENTS.update({f"expma_{n}": f"指数平均数（{n} 日）" for n in (12, 50)})
+_INDICATOR_BASE_COMMENTS.update({f"rsi_{n}": f"相对强弱指标 RSI（{n} 日）" for n in (6, 12, 24)})
 _DAY_COUNT_COMMENTS = {
     "updays": "连涨天数",
     "downdays": "连跌天数",
@@ -659,7 +651,7 @@ CLICKHOUSE_TABLE_DDL["shareholder_count"] = _shareholder_count_ddl()
 
 
 def migrate(settings: Settings) -> list[str]:
-    """创建八张 ClickHouse 业务表（幂等），返回创建的表名列表。"""
+    """幂等创建全部 ClickHouse 业务表，返回创建的表名列表。"""
     client = build_clickhouse_client(settings)
     created: list[str] = []
     for name, ddl in CLICKHOUSE_TABLE_DDL.items():
@@ -682,11 +674,13 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, Decimal):
         return str(value)
     if isinstance(value, datetime):
-        return (
-            value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "")
-        )
+        return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "")
     if isinstance(value, date):
         return value.isoformat()
+    if isinstance(value, Mapping):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(item) for item in value]
     if hasattr(value, "value"):
         return value.value
     return value

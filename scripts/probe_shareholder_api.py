@@ -42,21 +42,42 @@ def call(api_name: str, params: dict[str, object], label: str) -> None:
 
 
 # 1. 前十大股东：昨天公告 + 近期报告期
-call("top10_holders", {"ts_code": "600000.SH", "ann_date": "20260804", "limit": 1},
-     "top10_holders 昨天公告 ann_date=20260804 limit=1")
-call("top10_holders", {"ts_code": "600000.SH", "start_date": "20260331", "end_date": "20260804", "limit": 1},
-     "top10_holders 近期报告期 limit=1")
-call("top10_holders", {"ts_code": "600000.SH", "start_date": "20260331", "end_date": "20260804"},
-     "top10_holders 近期报告期（无 limit，看全量行为）")
+call(
+    "top10_holders",
+    {"ts_code": "600000.SH", "ann_date": "20260804", "limit": 1},
+    "top10_holders 昨天公告 ann_date=20260804 limit=1",
+)
+call(
+    "top10_holders",
+    {"ts_code": "600000.SH", "start_date": "20260331", "end_date": "20260804", "limit": 1},
+    "top10_holders 近期报告期 limit=1",
+)
+call(
+    "top10_holders",
+    {"ts_code": "600000.SH", "start_date": "20260331", "end_date": "20260804"},
+    "top10_holders 近期报告期（无 limit，看全量行为）",
+)
 
 # 2. 前十大流通股东
-call("top10_floatholders", {"ts_code": "600000.SH", "ann_date": "20260804", "limit": 1},
-     "top10_floatholders 昨天公告 ann_date=20260804 limit=1")
-call("top10_floatholders", {"ts_code": "600000.SH", "start_date": "20260331", "end_date": "20260804", "limit": 1},
-     "top10_floatholders 近期报告期 limit=1")
+call(
+    "top10_floatholders",
+    {"ts_code": "600000.SH", "ann_date": "20260804", "limit": 1},
+    "top10_floatholders 昨天公告 ann_date=20260804 limit=1",
+)
+call(
+    "top10_floatholders",
+    {"ts_code": "600000.SH", "start_date": "20260331", "end_date": "20260804", "limit": 1},
+    "top10_floatholders 近期报告期 limit=1",
+)
 
 # 3. 股东人数：昨天公告 + 近期公告区间
-call("stk_holdernumber", {"ts_code": "300199.SZ", "start_date": "20260801", "end_date": "20260804", "limit": 1},
-     "stk_holdernumber 昨天公告区间 limit=1")
-call("stk_holdernumber", {"ts_code": "300199.SZ", "start_date": "20260401", "end_date": "20260804", "limit": 1},
-     "stk_holdernumber 近期公告区间 limit=1")
+call(
+    "stk_holdernumber",
+    {"ts_code": "300199.SZ", "start_date": "20260801", "end_date": "20260804", "limit": 1},
+    "stk_holdernumber 昨天公告区间 limit=1",
+)
+call(
+    "stk_holdernumber",
+    {"ts_code": "300199.SZ", "start_date": "20260401", "end_date": "20260804", "limit": 1},
+    "stk_holdernumber 近期公告区间 limit=1",
+)
